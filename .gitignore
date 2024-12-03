@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Application specific
+logs/
+*.log
+downloads/
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+.directory
+
+# Media files
+*.mp3
+*.mp4
+*.m4a
+*.webm
+*.part
+*.temp
+
+# Local configuration
+config.local.py
+.env.local
+*.local.yml
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
