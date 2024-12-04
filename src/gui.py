@@ -57,7 +57,7 @@ class DownloaderGUI:
         # Menu Arquivo
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Arquivo", menu=file_menu)
-        file_menu.add_command(label="Novo Download", command=self.new_download)
+        file_menu.add_command(label="Novo Download", command=self.clear_fields)
         file_menu.add_command(label="Abrir Pasta Downloads", command=self.open_downloads)
         file_menu.add_separator()
         file_menu.add_command(label="Sair", command=self.root.quit)
