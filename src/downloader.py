@@ -1,15 +1,15 @@
 import os
 import subprocess
 import json
-import logging
 import time
+import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
-from config import (
+from .config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
     LOG_DIR, DOWNLOAD_DIR
 )
-from utils import validate_url, check_disk_space, sanitize_filename
+from .utils import validate_url, check_disk_space, sanitize_filename
 
 class DownloadError(Exception):
     """Exceção customizada para erros de download."""

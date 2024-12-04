@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from src.downloader import MediaDownloader, DownloadError
-from src.config import (
+from .downloader import MediaDownloader, DownloadError
+from .config import (
     FORMATS, THEMES, DOWNLOAD_SETTINGS, 
     PLAYLIST_SETTINGS, FAVORITES_DIR
 )
