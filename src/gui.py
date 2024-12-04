@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 import subprocess
+import sys
 
 from .downloader import MediaDownloader, DownloadError
 from .config import (
@@ -577,7 +578,7 @@ class DownloaderGUI:
         # Diretório de Downloads
         dir_frame = ttk.LabelFrame(tab, text="Diretório de Downloads")
         dir_frame.pack(fill="x", padx=10, pady=5)
-
+        
         self.download_dir = ttk.Entry(dir_frame)
         self.download_dir.pack(fill="x", side="left", expand=True, padx=5, pady=5)
         self.download_dir.insert(0, str(DOWNLOADS_DIR))
@@ -728,6 +729,29 @@ class DownloaderGUI:
         if selection:
             self.scheduled_downloads.pop(selection[0])
             self.scheduled_listbox.delete(selection)
+
+    def show_docs(self):
+        """Abre a documentação do sistema."""
+        docs_path = os.path.join(os.path.dirname(__file__), "..", "docs", "USAGE.md")
+        if os.path.exists(docs_path):
+            if sys.platform == "win32":
+                os.startfile(docs_path)
+            else:
+                subprocess.run(["xdg-open", docs_path])
+        else:
+            messagebox.showerror("Erro", "Documentação não encontrada!")
+
+    def show_about(self):
+        """Mostra informações sobre o sistema."""
+        about_text = """DowTube - YouTube Media Downloader
+Versão: 2.1.0
+
+Um downloader de mídia do YouTube robusto e rico em recursos.
+Desenvolvido por ScParis.
+
+ 2024 ScParis. Todos os direitos reservados."""
+        
+        messagebox.showinfo("Sobre", about_text)
 
 if __name__ == "__main__":
     app = DownloaderGUI()

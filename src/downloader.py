@@ -13,10 +13,12 @@ from dataclasses import dataclass
 
 from .config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
-    LOG_DIR, DOWNLOADS_DIR
+    DOWNLOADS_DIR, CHUNK_SIZE, DOWNLOAD_TIMEOUT, MAX_DOWNLOAD_SIZE,
+    PREVIEW_DURATION
 )
 from .utils import (
-    validate_url, check_disk_space, sanitize_filename
+    validate_url, check_disk_space, sanitize_filename,
+    ValidationError
 )
 
 class DownloadError(Exception):
@@ -47,9 +49,9 @@ class MediaDownloader:
 
     def setup_logging(self):
         """Configura o sistema de logging."""
-        os.makedirs(LOG_DIR, exist_ok=True)
+        os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         logging.basicConfig(
-            filename=os.path.join(LOG_DIR, "downloader.log"),
+            filename=os.path.join(DOWNLOADS_DIR, "downloader.log"),
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s"
         )
@@ -57,9 +59,8 @@ class MediaDownloader:
     def ensure_directories(self):
         """Garante que os diretórios necessários existam."""
         os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-        os.makedirs(LOG_DIR, exist_ok=True)
 
-    def get_media_info(self, url):
+    def get_media_info(self, url: str) -> Dict:
         """Obtém informações sobre o vídeo/playlist."""
         try:
             validate_url(url)
@@ -70,95 +71,140 @@ class MediaDownloader:
                 url
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            return [json.loads(line) for line in result.stdout.splitlines()]
+            info = json.loads(result.stdout)
+            return info
         except subprocess.CalledProcessError as e:
             raise DownloadError(f"Erro ao obter informações: {str(e)}")
         except json.JSONDecodeError as e:
-            raise DownloadError(f"Erro ao processar informações: {str(e)}")
+            raise DownloadError(f"Erro ao decodificar informações: {str(e)}")
 
-    def download_single(self, url, output_path, format_info, callback=None):
-        """Download de um único vídeo/áudio com retry."""
-        for attempt in range(MAX_RETRIES):
-            try:
-                cmd = [self.yt_dlp_path, "--output", output_path]
-                
-                if format_info["format"] == "mp3":
-                    cmd.extend([
-                        "-x",
-                        "--audio-format", "mp3",
-                        "--audio-quality", format_info["quality"]
-                    ])
-                else:
-                    cmd.extend([
-                        "-f", f"bestvideo[height<={format_info['quality']}]+bestaudio",
-                        "--merge-output-format", "mp4"
-                    ])
-                
-                cmd.append(url)
-                
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-
-                while True:
-                    line = process.stdout.readline()
-                    if not line:
-                        break
-                    if callback and "[download]" in line:
-                        callback(line)
-
-                process.communicate()
-                if process.returncode == 0:
-                    return True
-                
-                raise DownloadError(f"Download falhou com código {process.returncode}")
-            
-            except Exception as e:
-                logging.error(f"Tentativa {attempt + 1} falhou: {str(e)}")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY)
-                else:
-                    raise DownloadError(f"Todas as tentativas falharam: {str(e)}")
-
-    def download_playlist(self, url, output_dir, format_choice, quality, progress_callback=None):
-        """Download de playlist com suporte a downloads paralelos."""
+    def download_media(self, url: str, output_dir: Path, format_options: Dict, callback: Optional[Callable] = None) -> None:
+        """Baixa mídia do YouTube."""
         try:
             validate_url(url)
             check_disk_space(output_dir)
-            
-            media_info = self.get_media_info(url)
-            format_info = FORMATS[format_choice][quality]
-            
-            with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS) as executor:
-                futures = []
-                for item in media_info:
-                    output_path = os.path.join(
-                        output_dir,
-                        f"{sanitize_filename(item.get('title', 'unknown'))}.%(ext)s"
-                    )
-                    future = executor.submit(
-                        self.download_single,
-                        item.get("webpage_url", url),
-                        output_path,
-                        format_info,
-                        progress_callback
-                    )
-                    futures.append(future)
-                
-                return [future.result() for future in futures]
-        
-        except Exception as e:
-            logging.exception("Erro durante o download")
+
+            # Cria tarefa de download
+            task = DownloadTask(
+                url=url,
+                output_path=output_dir,
+                format_options=format_options,
+                callback=callback
+            )
+
+            # Adiciona à fila
+            self.download_queue.put(task)
+            self.active_downloads[url] = task
+
+            # Inicia o download
+            self._process_download(task)
+
+        except (ValidationError, DownloadError) as e:
             raise DownloadError(str(e))
 
-    def get_available_formats(self):
-        """Retorna os formatos disponíveis."""
-        return FORMATS
+    def _process_download(self, task: DownloadTask) -> None:
+        """Processa uma tarefa de download."""
+        try:
+            # Prepara comando yt-dlp
+            cmd = [
+                self.yt_dlp_path,
+                "--format", task.format_options["format"],
+                "--output", str(task.output_path / "%(title)s.%(ext)s"),
+                task.url
+            ]
 
-    def cancel_downloads(self):
-        """Cancela downloads em andamento."""
-        # Implementação do cancelamento
-        pass
+            if "quality" in task.format_options:
+                cmd.extend(["--audio-quality", task.format_options["quality"]])
+
+            # Inicia processo
+            task.process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+
+            # Monitora progresso
+            while task.process.poll() is None:
+                if self._stop_event.is_set():
+                    task.process.terminate()
+                    break
+
+                if task.callback:
+                    task.callback(task.progress, "Downloading...")
+
+                time.sleep(0.1)
+
+            # Verifica resultado
+            if task.process.returncode == 0:
+                task.status = "completed"
+                if task.callback:
+                    task.callback(100, "Download completed")
+            else:
+                task.status = "failed"
+                task.error = task.process.stderr.read() if task.process.stderr else "Unknown error"
+                if task.callback:
+                    task.callback(0, f"Download failed: {task.error}")
+
+        except Exception as e:
+            task.status = "failed"
+            task.error = str(e)
+            if task.callback:
+                task.callback(0, f"Download failed: {str(e)}")
+
+        finally:
+            if task.url in self.active_downloads:
+                del self.active_downloads[task.url]
+
+    def preview_media(self, url: str, format_options: Dict) -> Optional[Path]:
+        """Gera uma prévia da mídia."""
+        try:
+            validate_url(url)
+            preview_dir = DOWNLOADS_DIR / "previews"
+            os.makedirs(preview_dir, exist_ok=True)
+
+            # Gera nome único para prévia
+            preview_name = f"preview_{int(time.time())}"
+            preview_path = preview_dir / f"{preview_name}.{format_options['format']}"
+
+            # Prepara comando yt-dlp com limite de duração
+            cmd = [
+                self.yt_dlp_path,
+                "--format", format_options["format"],
+                "--output", str(preview_path),
+                "--postprocessor-args", f"-t {PREVIEW_DURATION}",
+                url
+            ]
+
+            if "quality" in format_options:
+                cmd.extend(["--audio-quality", format_options["quality"]])
+
+            # Executa comando
+            process = subprocess.Popen(cmd)
+            process.wait()
+
+            if process.returncode == 0:
+                return preview_path
+            return None
+
+        except Exception as e:
+            logging.error(f"Erro ao gerar prévia: {str(e)}")
+            return None
+
+    def cancel_download(self, url: str) -> None:
+        """Cancela um download em andamento."""
+        if url in self.active_downloads:
+            task = self.active_downloads[url]
+            if task.process and task.process.poll() is None:
+                task.process.terminate()
+                task.status = "cancelled"
+                if task.callback:
+                    task.callback(0, "Download cancelled")
+
+    def cleanup(self) -> None:
+        """Limpa recursos do downloader."""
+        self._stop_event.set()
+        for task in self.active_downloads.values():
+            if task.process and task.process.poll() is None:
+                task.process.terminate()
+        self.executor.shutdown(wait=False)

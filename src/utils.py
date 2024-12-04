@@ -1,6 +1,7 @@
 import os
 import shutil
 import re
+from pathlib import Path
 from .config import VALID_URL_REGEX, MIN_DISK_SPACE
 
 class ValidationError(Exception):
@@ -17,24 +18,37 @@ def validate_url(url):
 
 def check_disk_space(path):
     """Verifica se há espaço em disco suficiente."""
-    try:
-        total, used, free = shutil.disk_usage(path)
-        free_mb = free // (1024 * 1024)
-        if free_mb < MIN_DISK_SPACE:
-            raise ValueError(f"Espaço em disco insuficiente. Necessário: {MIN_DISK_SPACE}MB, Disponível: {free_mb}MB")
-        return True
-    except Exception as e:
-        raise ValueError(f"Erro ao verificar espaço em disco: {str(e)}")
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+    
+    free_space = shutil.disk_usage(path).free
+    if free_space < MIN_DISK_SPACE:
+        raise ValidationError(
+            f"Espaço em disco insuficiente. Necessário: {MIN_DISK_SPACE} bytes, "
+            f"Disponível: {free_space} bytes"
+        )
+    return True
 
 def sanitize_filename(filename):
-    """Remove caracteres inválidos do nome do arquivo."""
-    invalid_chars = '<>:"/\\|?*'
-    for char in invalid_chars:
-        filename = filename.replace(char, '_')
+    """Sanitiza o nome do arquivo para ser seguro em qualquer sistema de arquivos."""
+    # Remove caracteres inválidos
+    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    
+    # Remove espaços em branco no início e fim
+    filename = filename.strip()
+    
+    # Substitui espaços por underscore
+    filename = filename.replace(' ', '_')
+    
+    # Limita o tamanho do nome do arquivo
+    if len(filename) > 255:
+        name, ext = os.path.splitext(filename)
+        filename = name[:255-len(ext)] + ext
+    
     return filename
 
 def format_size(size_bytes):
-    """Formata o tamanho em bytes para formato legível."""
+    """Formata o tamanho em bytes para uma string legível."""
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size_bytes < 1024:
             return f"{size_bytes:.2f} {unit}"
@@ -42,12 +56,11 @@ def format_size(size_bytes):
     return f"{size_bytes:.2f} TB"
 
 def format_duration(seconds):
-    """Formata duração em segundos para formato legível."""
+    """Formata a duração em segundos para uma string legível."""
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     seconds = seconds % 60
+    
     if hours > 0:
-        return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
-    elif minutes > 0:
-        return f"{int(minutes)}m {int(seconds)}s"
-    return f"{int(seconds)}s"
+        return f"{int(hours)}:{int(minutes):02d}:{int(seconds):02d}"
+    return f"{int(minutes):02d}:{int(seconds):02d}"
