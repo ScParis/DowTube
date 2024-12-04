@@ -1,70 +1,77 @@
-# YouTube Downloader
+# DowTube
 
-A modern, feature-rich YouTube downloader with a beautiful graphical interface.
+A modern, feature-rich YouTube downloader with a beautiful graphical interface built with CustomTkinter.
 
 ## Features
 
 - 🎵 Download audio (MP3) and video (MP4)
-- 🎨 Modern, user-friendly interface
-- 📊 Multiple quality options
-- 🔄 Parallel downloads
-- 📥 Download queue management
-- 🕒 Download history
-- 🎯 Preview before download
-- 📝 Detailed logging
+- 🎨 Modern, dark-themed interface with CustomTkinter
+- 📊 Multiple quality options for both audio and video
+- 🔄 Parallel downloads with queue management
+- 📑 Playlist download support
+- ⭐ Favorites management
+- 📅 Download scheduling
+- ⚙️ Customizable settings
+- 🎯 Media preview capabilities
+- 📝 Detailed logging and error handling
 - 🚀 Performance optimized
-- 💾 Smart caching system
+- 💾 Smart disk space management
 
 ## Requirements
 
-- Python 3.8+
-- yt-dlp
-- FFmpeg (for audio conversion)
+- Python 3.10+
+- FFmpeg (for media processing)
+- System dependencies listed in requirements.txt
 
 ## Quick Start
 
-1. Clone the repository
-2. Install dependencies:
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/DowTube.git
+cd DowTube
+```
+
+2. Create and activate virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
 pip install -r requirements.txt
 ```
 
-3. Run the application:
+4. Run the application:
 ```bash
-python src/gui.py
+python main.py
 ```
 
 ## Documentation
 
 - [User Guide](docs/USAGE.md)
-- [API Documentation](docs/API.md)
+- [Changelog](CHANGES.rst)
 
 ## Project Structure
 
 ```
-youtube-downloader/
-├── src/                 # Source code
+DowTube/
+├── src/                    # Source code
 │   ├── __init__.py
-│   ├── config.py       # Configuration
-│   ├── downloader.py   # Core functionality
-│   ├── gui.py         # User interface
-│   └── utils.py       # Utilities
-├── tests/              # Unit tests
-├── docs/               # Documentation
-├── downloads/          # Default download directory
-├── logs/              # Log files
-└── requirements.txt    # Dependencies
+│   ├── config.py          # Configuration settings
+│   ├── downloader.py      # Download functionality
+│   ├── gui.py            # User interface
+│   └── utils.py          # Utility functions
+├── tests/                 # Test suite
+├── docs/                  # Documentation
+├── downloads/            # Default download directory
+├── logs/                 # Application logs
+└── favorites/           # Saved favorites
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
@@ -72,6 +79,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- yt-dlp team for the excellent download engine
-- CustomTkinter for the modern UI components
-- All contributors and users
+- CustomTkinter for the modern UI framework
+- yt-dlp for the robust download capabilities
+- FFmpeg for media processing

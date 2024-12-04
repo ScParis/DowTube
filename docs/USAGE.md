@@ -1,11 +1,11 @@
-# YouTube Downloader - User Guide
+# DowTube - User Guide
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/youtube-downloader.git
-cd youtube-downloader
+git clone https://github.com/yourusername/DowTube.git
+cd DowTube
 ```
 
 2. Create a virtual environment:
@@ -19,87 +19,126 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Using DowTube
 
-### Graphical Interface
+### Starting the Application
 
-1. Start the application:
+Launch DowTube by running:
 ```bash
-python src/gui.py
+python main.py
 ```
 
-2. Enter a YouTube URL in the URL field
+### Main Interface
 
-3. Select destination folder using the "Browse" button
+The application features a modern, dark-themed interface with a sidebar navigation and multiple tabs:
 
-4. Choose format:
-   - MP3: For audio only
-   - MP4: For video with audio
-
-5. Select quality:
-   - MP3:
-     - High Quality (320K)
-     - Medium Quality (192K)
-     - Low Quality (128K)
-   - MP4:
+#### Download Tab
+1. Enter a YouTube URL in the input field
+2. Choose download format:
+   - Audio (MP3)
+   - Video (MP4)
+3. Select quality:
+   - Audio Quality:
+     - High (320K)
+     - Medium (192K)
+     - Low (128K)
+   - Video Quality:
      - 1080p
      - 720p
      - 480p
      - 360p
+4. Click "Download" to start
 
-6. Click "Start Download"
+#### Playlist Tab
+1. Enter a YouTube playlist URL
+2. Select download options for all videos
+3. Choose which videos to include
+4. Start batch download
 
-### Features
+#### Favorites Tab
+- Save frequently used URLs
+- Organize your favorite videos
+- Quick access to common downloads
 
-#### Preview
-- Use the preview feature to check the content before downloading
-- Preview length is limited to 30 seconds
+#### Schedule Tab
+- Schedule downloads for later
+- Set up recurring downloads
+- Manage scheduled tasks
 
-#### Download History
-- View recent downloads
-- Check download status and details
+#### Settings Tab
+- Configure download directory
+- Set default quality preferences
+- Adjust application theme
+- Manage system resources
 
-#### Multiple Downloads
-- Queue multiple downloads
-- Cancel individual downloads
-- Monitor progress of all downloads
+### Additional Features
 
-## Configuration
+1. **Progress Tracking**
+   - Real-time download progress
+   - Speed and time remaining
+   - Queue management
 
-The application can be configured by editing `src/config.py`:
+2. **Media Preview**
+   - Thumbnail preview
+   - Basic media information
+   - Duration and quality info
 
-- Download settings (chunk size, timeout)
-- Cache settings
-- Format options
-- Interface preferences
-- Performance limits
+3. **Error Handling**
+   - Clear error messages
+   - Automatic retry options
+   - Detailed logging
+
+4. **Disk Space Management**
+   - Automatic space checking
+   - Warning for insufficient space
+   - Clean-up recommendations
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. "URL Invalid":
-   - Make sure the URL is from YouTube
-   - URL should start with https://www.youtube.com/
-
-2. "Insufficient Disk Space":
-   - Free up disk space
-   - Change download directory
-
-3. "Download Failed":
+1. **Download Fails**
    - Check internet connection
-   - Try a different format/quality
-   - Check if video is available in your region
+   - Verify URL is valid
+   - Ensure sufficient disk space
+   - Check logs for details
 
-### Logs
+2. **Audio Conversion Issues**
+   - Verify FFmpeg is installed
+   - Check file permissions
+   - Ensure temp directory is writable
 
-Logs are stored in the `logs` directory:
-- `downloader.log`: Download operations
-- Error details and debugging information
+3. **Interface Not Responding**
+   - Check system resources
+   - Reduce concurrent downloads
+   - Restart application
 
-## Support
+### Getting Help
 
-For issues and feature requests:
-- Open an issue on GitHub
-- Include log files when reporting problems
-- Provide URL examples when relevant
+- Check the logs in the `logs` directory
+- Review error messages in the application
+- Submit issues on GitHub with log details
+
+## Updates
+
+DowTube checks for updates automatically. When available:
+1. A notification will appear
+2. Follow the update instructions
+3. Restart the application
+
+## Best Practices
+
+1. **Optimal Performance**
+   - Limit concurrent downloads
+   - Regular cache cleanup
+   - Monitor disk space
+
+2. **Organization**
+   - Use meaningful filenames
+   - Organize downloads by category
+   - Regularly backup favorites
+
+3. **Resource Management**
+   - Close unused tabs
+   - Clear download history
+   - Remove completed downloads

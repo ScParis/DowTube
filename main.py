@@ -10,7 +10,7 @@ def main():
     app = DownloaderGUI()
     
     # Start the application
-    app.run()
+    app.mainloop()
 
 if __name__ == "__main__":
     main()
