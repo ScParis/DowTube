@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from gui import DownloaderGUI
+from src.gui import DownloaderGUI
 
 def main():
     # Set appearance mode and default color theme
