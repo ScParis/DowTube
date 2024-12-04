@@ -7,7 +7,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from .config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
-    LOG_DIR, DOWNLOAD_DIR
+    LOG_DIR, DOWNLOADS_DIR
 )
 from .utils import validate_url, check_disk_space, sanitize_filename
 
@@ -32,7 +32,7 @@ class MediaDownloader:
 
     def ensure_directories(self):
         """Garante que os diretórios necessários existam."""
-        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+        os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         os.makedirs(LOG_DIR, exist_ok=True)
 
     def get_media_info(self, url):
