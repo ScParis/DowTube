@@ -348,6 +348,59 @@ class DownloaderGUI:
     def run(self):
         self.root.mainloop()
 
+    def show_preferences(self):
+        """Mostra a janela de preferências."""
+        preferences_window = tk.Toplevel(self.root)
+        preferences_window.title("Preferências")
+        preferences_window.geometry("400x300")
+        preferences_window.resizable(False, False)
+
+        # Tema
+        theme_frame = ttk.LabelFrame(preferences_window, text="Tema")
+        theme_frame.pack(padx=10, pady=5, fill="x")
+
+        theme_var = tk.StringVar(value=THEMES["current"])
+        for theme in THEMES["available"]:
+            ttk.Radiobutton(theme_frame, text=theme.title(), value=theme,
+                          variable=theme_var).pack(padx=5, pady=2)
+
+        # Downloads
+        downloads_frame = ttk.LabelFrame(preferences_window, text="Downloads")
+        downloads_frame.pack(padx=10, pady=5, fill="x")
+
+        max_downloads_var = tk.IntVar(value=DOWNLOAD_SETTINGS["max_concurrent"])
+        ttk.Label(downloads_frame, text="Downloads simultâneos:").pack(padx=5, pady=2)
+        ttk.Entry(downloads_frame, textvariable=max_downloads_var).pack(padx=5, pady=2)
+
+        # Botões
+        buttons_frame = ttk.Frame(preferences_window)
+        buttons_frame.pack(pady=10)
+
+        ttk.Button(buttons_frame, text="Salvar", command=lambda: self.save_preferences(
+            theme_var.get(),
+            max_downloads_var.get(),
+            preferences_window
+        )).pack(side="left", padx=5)
+
+        ttk.Button(buttons_frame, text="Cancelar",
+                  command=preferences_window.destroy).pack(side="left", padx=5)
+
+    def save_preferences(self, theme: str, max_downloads: int, window: tk.Toplevel):
+        """Salva as preferências."""
+        # Atualiza o tema
+        if theme != THEMES["current"]:
+            THEMES["current"] = theme
+            if theme == "dark":
+                ctk.set_appearance_mode("dark")
+            else:
+                ctk.set_appearance_mode("light")
+
+        # Atualiza as configurações de download
+        DOWNLOAD_SETTINGS["max_concurrent"] = max_downloads
+
+        # Fecha a janela
+        window.destroy()
+
 if __name__ == "__main__":
     app = DownloaderGUI()
     app.run()
