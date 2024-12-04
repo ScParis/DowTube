@@ -1,7 +1,7 @@
 import os
 import shutil
 import re
-from config import VALID_URL_REGEX, MIN_DISK_SPACE
+from .config import VALID_URL_REGEX, MIN_DISK_SPACE
 
 def validate_url(url):
     """Valida a URL do YouTube."""
