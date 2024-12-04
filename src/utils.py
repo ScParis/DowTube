@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import logging
 import hashlib
 import shutil
@@ -10,85 +9,121 @@ from datetime import datetime
 from urllib.parse import urlparse
 import requests
 
-from src.config import (
-    LOG_DIR, CACHE_DIR, SECURITY_SETTINGS,
-    DOWNLOAD_SETTINGS
+from .config import (
+    VALID_URL_REGEX, MIN_DISK_SPACE, LOG_FORMAT,
+    LOG_FILE, LOG_DIR, SECURITY_SETTINGS,
+    DOWNLOAD_SETTINGS, CACHE_DIR
 )
 
 class ValidationError(Exception):
-    """Exceção para erros de validação."""
+    """Exceção customizada para erros de validação."""
     pass
 
-def setup_logger(name: str) -> logging.Logger:
-    """Configura e retorna um logger."""
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
-
-    # Handler de arquivo
-    log_file = LOG_DIR / f"{name}.log"
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)
-
-    # Handler de console
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-
-    # Formato do log
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    return logger
-
 def validate_url(url: str) -> bool:
-    """Valida uma URL do YouTube."""
+    """Valida a URL do YouTube."""
+    if not url:
+        raise ValidationError("URL não pode estar vazia")
+    if not re.match(VALID_URL_REGEX, url):
+        raise ValidationError("URL inválida. Deve ser uma URL válida do YouTube")
     try:
         parsed = urlparse(url)
         if parsed.netloc not in SECURITY_SETTINGS["allowed_domains"]:
             raise ValidationError("Domínio não permitido")
-        
-        # Verifica se é uma URL válida do YouTube
-        patterns = [
-            r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-            r'^https?://youtu\.be/[\w-]+',
-            r'^https?://(?:www\.)?youtube\.com/playlist\?list=[\w-]+'
-        ]
-        
-        return any(re.match(pattern, url) for pattern in patterns)
-    
     except Exception as e:
         raise ValidationError(f"URL inválida: {str(e)}")
+    return True
 
-def check_disk_space(path: Path, required_bytes: int) -> bool:
+def check_disk_space(path: str) -> bool:
     """Verifica se há espaço em disco suficiente."""
     try:
         total, used, free = shutil.disk_usage(path)
-        return free > required_bytes
+        free_mb = free // (1024 * 1024)
+        if free_mb < MIN_DISK_SPACE:
+            raise ValidationError(f"Espaço em disco insuficiente. Necessário: {MIN_DISK_SPACE}MB, Disponível: {free_mb}MB")
+        return True
     except Exception as e:
         raise ValidationError(f"Erro ao verificar espaço em disco: {str(e)}")
 
 def sanitize_filename(filename: str) -> str:
-    """Sanitiza o nome do arquivo para ser seguro em qualquer sistema."""
-    # Remove caracteres inválidos
+    """Remove caracteres inválidos do nome do arquivo."""
     invalid_chars = '<>:"/\\|?*'
     for char in invalid_chars:
-        filename = filename.replace(char, '')
-    
-    # Remove espaços extras e pontos no final
-    filename = re.sub(r'\s+', ' ', filename).strip().rstrip('.')
-    
-    # Limita o tamanho do nome
-    max_length = 255
-    if len(filename) > max_length:
-        name, ext = os.path.splitext(filename)
-        filename = name[:max_length-len(ext)] + ext
-    
+        filename = filename.replace(char, '_')
     return filename
+
+def format_size(size_bytes: float) -> str:
+    """Formata o tamanho em bytes para formato legível."""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.2f} TB"
+
+def format_duration(seconds: int) -> str:
+    """Formata duração em segundos para formato legível."""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    if hours > 0:
+        return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
+    elif minutes > 0:
+        return f"{int(minutes)}m {int(seconds)}s"
+    return f"{int(seconds)}s"
+
+def setup_logger(name: str) -> logging.Logger:
+    """Configura e retorna um logger."""
+    # Cria o diretório de logs se não existir
+    os.makedirs(LOG_DIR, exist_ok=True)
+    
+    # Configura o logger
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    
+    # Handler para arquivo
+    file_handler = logging.FileHandler(LOG_FILE)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger.addHandler(file_handler)
+    
+    # Handler para console
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger.addHandler(console_handler)
+    
+    return logger
+
+def cache_manager(func):
+    """Decorator para gerenciar cache de downloads."""
+    cache: Dict[str, Any] = {}
+    
+    def wrapper(*args, **kwargs):
+        cache_key = str(args) + str(kwargs)
+        if cache_key not in cache:
+            cache[cache_key] = func(*args, **kwargs)
+        return cache[cache_key]
+    
+    return wrapper
+
+def download_history(func):
+    """Decorator para registrar histórico de downloads."""
+    def wrapper(*args, **kwargs):
+        start_time = datetime.now()
+        result = func(*args, **kwargs)
+        end_time = datetime.now()
+        
+        # Registra o download no histórico
+        history_entry = {
+            "url": args[1] if len(args) > 1 else kwargs.get("url"),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "duration": str(end_time - start_time),
+            "success": True if result else False
+        }
+        
+        # TODO: Implementar persistência do histórico
+        
+        return result
+    
+    return wrapper
 
 class CacheManager:
     """Gerencia o cache de informações de vídeo."""

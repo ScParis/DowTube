@@ -11,12 +11,12 @@ from typing import Dict, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from config import (
+from .config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
     DOWNLOADS_DIR, CHUNK_SIZE, DOWNLOAD_TIMEOUT, MAX_DOWNLOAD_SIZE,
     PREVIEW_DURATION
 )
-from utils import (
+from .utils import (
     validate_url, check_disk_space, sanitize_filename,
     cache_manager, download_history, setup_logger,
     ValidationError
@@ -52,198 +52,146 @@ class MediaDownloader:
             self.workers.append(worker)
 
     def _download_worker(self):
-        """Thread trabalhadora para processar downloads da fila."""
+        """Função principal da thread trabalhadora."""
         while True:
             try:
                 task = self.download_queue.get()
                 if task is None:
                     break
-                
-                download_id = id(task)
-                self.cancel_events[download_id] = threading.Event()
-                
+
+                # Configura evento de cancelamento
+                cancel_event = threading.Event()
+                self.cancel_events[task.url] = cancel_event
+
                 try:
-                    self._process_download_task(task, download_id)
+                    self._process_download(task, cancel_event)
                 except Exception as e:
-                    self.logger.error(f"Erro no download {download_id}: {str(e)}")
+                    self.logger.error(f"Erro no download de {task.url}: {str(e)}")
+                    if task.callback:
+                        task.callback(False, str(e))
                 finally:
                     self.download_queue.task_done()
-                    self.active_downloads.pop(download_id, None)
-                    self.cancel_events.pop(download_id, None)
-            
+                    if task.url in self.cancel_events:
+                        del self.cancel_events[task.url]
+
             except Exception as e:
                 self.logger.error(f"Erro na thread trabalhadora: {str(e)}")
 
-    def _process_download_task(self, task: DownloadTask, download_id: int):
-        """Processa uma tarefa de download individual."""
-        try:
-            # Configurar comando base
-            cmd = [
-                "yt-dlp",
-                "--output", str(task.output_path),
-                "--socket-timeout", str(DOWNLOAD_TIMEOUT),
-                "--limit-rate", f"{CHUNK_SIZE}K"
-            ]
-
-            if task.preview_only:
-                cmd.extend([
-                    "--download-sections", f"*0:{PREVIEW_DURATION}",
-                    "--force-overwrites"
-                ])
-
-            if task.format_info["format"] == "mp3":
-                cmd.extend([
-                    "-x",
-                    "--audio-format", "mp3",
-                    "--audio-quality", task.format_info["quality"]
-                ])
-            else:
-                cmd.extend([
-                    "-f", f"bestvideo[height<={task.format_info['quality']}]+bestaudio",
-                    "--merge-output-format", "mp4"
-                ])
-
-            cmd.append(task.url)
-
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-
-            self.active_downloads[download_id] = process
-
-            while True:
-                if self.cancel_events[download_id].is_set():
-                    process.terminate()
-                    raise DownloadError("Download cancelado pelo usuário")
-
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-
-                if task.callback and "[download]" in line:
-                    task.callback(line)
-
-            if process.returncode != 0:
-                raise DownloadError(f"Download falhou com código {process.returncode}")
-
-            # Registrar download bem-sucedido
-            if not task.preview_only:
-                download_history.add_entry(
-                    task.url,
-                    task.format_info["format"],
-                    task.format_info["quality"],
-                    "completed"
-                )
-
-        except Exception as e:
-            if not task.preview_only:
-                download_history.add_entry(
-                    task.url,
-                    task.format_info["format"],
-                    task.format_info["quality"],
-                    f"failed: {str(e)}"
-                )
-            raise
-
-    def get_media_info(self, url: str) -> Dict:
-        """Obtém informações sobre o vídeo/playlist."""
-        try:
-            # Tentar obter do cache primeiro
-            cached_info = cache_manager.get(url)
-            if cached_info:
-                return cached_info
-
-            validate_url(url)
-            cmd = [
-                "yt-dlp",
-                "--dump-json",
-                "--no-playlist",
-                url
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            info = json.loads(result.stdout)
-
-            # Salvar no cache
-            cache_manager.set(url, info)
-            return info
-
-        except subprocess.CalledProcessError as e:
-            raise DownloadError(f"Erro ao obter informações: {str(e)}")
-        except json.JSONDecodeError as e:
-            raise DownloadError(f"Erro ao processar informações: {str(e)}")
-
-    def preview_media(self, url: str, format_info: Dict, callback: Optional[Callable] = None) -> Path:
-        """Gera uma prévia do vídeo/áudio."""
-        try:
-            info = self.get_media_info(url)
-            preview_filename = f"preview_{sanitize_filename(info['title'])}"
-            preview_path = DOWNLOADS_DIR / "previews" / preview_filename
-
-            task = DownloadTask(
-                url=url,
-                output_path=preview_path,
-                format_info=format_info,
-                callback=callback,
-                preview_only=True
-            )
-
-            self.download_queue.put(task)
-            return preview_path
-
-        except Exception as e:
-            raise DownloadError(f"Erro ao gerar prévia: {str(e)}")
-
-    def download_media(self, url: str, output_dir: Path, format_info: Dict,
-                      callback: Optional[Callable] = None) -> None:
-        """Inicia o download de mídia."""
+    @cache_manager
+    def get_video_info(self, url: str) -> Dict:
+        """Obtém informações do vídeo."""
         try:
             validate_url(url)
-            check_disk_space(output_dir)
+            
+            # Usa yt-dlp para obter informações
+            cmd = ['yt-dlp', '-J', url]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise DownloadError(f"Erro ao obter informações: {result.stderr}")
+            
+            return json.loads(result.stdout)
+        
+        except Exception as e:
+            raise DownloadError(f"Erro ao obter informações do vídeo: {str(e)}")
 
-            info = self.get_media_info(url)
-            filename = sanitize_filename(info['title'])
-            output_path = output_dir / filename
-
+    @download_history
+    def download(self, url: str, format_info: Dict, output_path: Optional[Path] = None,
+                callback: Optional[Callable] = None, preview: bool = False) -> bool:
+        """Inicia o download de uma mídia."""
+        try:
+            # Valida a URL
+            validate_url(url)
+            
+            # Define o diretório de saída
+            if output_path is None:
+                output_path = DOWNLOADS_DIR
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            # Verifica espaço em disco
+            check_disk_space(str(output_path))
+            
+            # Cria a tarefa de download
             task = DownloadTask(
                 url=url,
                 output_path=output_path,
                 format_info=format_info,
-                callback=callback
+                callback=callback,
+                preview_only=preview
             )
-
+            
+            # Adiciona à fila de download
             self.download_queue.put(task)
-
+            
+            return True
+        
         except Exception as e:
-            raise DownloadError(f"Erro ao iniciar download: {str(e)}")
+            self.logger.error(f"Erro ao iniciar download: {str(e)}")
+            if callback:
+                callback(False, str(e))
+            return False
 
-    def cancel_download(self, download_id: int):
+    def _process_download(self, task: DownloadTask, cancel_event: threading.Event) -> bool:
+        """Processa o download de uma mídia."""
+        try:
+            # Prepara o comando yt-dlp
+            cmd = ['yt-dlp']
+            
+            # Adiciona opções de formato
+            format_str = f"-f bestvideo[ext={task.format_info['format']}]+bestaudio/best[ext={task.format_info['format']}]"
+            if 'quality' in task.format_info:
+                format_str += f"[height<={task.format_info['quality']}]"
+            cmd.append(format_str)
+            
+            # Configura o arquivo de saída
+            output_template = str(task.output_path / '%(title)s.%(ext)s')
+            cmd.extend(['-o', output_template])
+            
+            # Adiciona outras opções
+            if task.preview_only:
+                cmd.extend(['--download-sections', f'*0:{PREVIEW_DURATION}'])
+            
+            # Adiciona a URL
+            cmd.append(task.url)
+            
+            # Executa o download
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            # Monitora o progresso
+            while True:
+                if cancel_event.is_set():
+                    process.terminate()
+                    raise DownloadError("Download cancelado pelo usuário")
+                
+                return_code = process.poll()
+                if return_code is not None:
+                    if return_code != 0:
+                        raise DownloadError(f"Erro no download: {process.stderr.read()}")
+                    break
+                
+                time.sleep(0.1)
+            
+            if task.callback:
+                task.callback(True, "Download concluído com sucesso")
+            return True
+            
+        except Exception as e:
+            if task.callback:
+                task.callback(False, str(e))
+            raise DownloadError(str(e))
+
+    def cancel_download(self, url: str) -> bool:
         """Cancela um download em andamento."""
-        if download_id in self.cancel_events:
-            self.cancel_events[download_id].set()
+        if url in self.cancel_events:
+            self.cancel_events[url].set()
+            return True
+        return False
 
-    def get_active_downloads(self) -> List[Dict]:
-        """Retorna informações sobre downloads ativos."""
-        return [
-            {
-                "id": download_id,
-                "status": "downloading" if process.poll() is None else "finishing"
-            }
-            for download_id, process in self.active_downloads.items()
-        ]
-
-    def cleanup(self):
-        """Limpa recursos e encerra threads trabalhadoras."""
-        # Sinalizar para as threads pararem
-        for _ in self.workers:
-            self.download_queue.put(None)
-        
-        # Esperar todas as threads terminarem
-        for worker in self.workers:
-            worker.join()
-        
-        # Cancelar downloads ativos
-        for download_id in list(self.active_downloads.keys()):
-            self.cancel_download(download_id)
+    def get_active_downloads(self) -> List[str]:
+        """Retorna lista de downloads ativos."""
+        return list(self.active_downloads.keys())
