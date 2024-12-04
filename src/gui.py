@@ -328,6 +328,13 @@ class DownloaderGUI:
         if progress is not None:
             self.progress_bar["value"] = progress
 
+    def clear_fields(self):
+        """Limpa todos os campos do formulário."""
+        self.url_entry.delete(0, tk.END)
+        self.format_var.set(list(FORMATS.keys())[0])
+        self.progress_bar.set(0)
+        self.status_label.configure(text="")
+
     def run(self):
         self.root.mainloop()
 
