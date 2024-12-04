@@ -3,23 +3,47 @@ import subprocess
 import json
 import time
 import logging
+import threading
+import queue
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+
 from .config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
     LOG_DIR, DOWNLOADS_DIR
 )
-from .utils import validate_url, check_disk_space, sanitize_filename
+from .utils import (
+    validate_url, check_disk_space, sanitize_filename
+)
 
 class DownloadError(Exception):
     """Exceção customizada para erros de download."""
     pass
+
+@dataclass
+class DownloadTask:
+    """Representa uma tarefa de download."""
+    url: str
+    output_path: Path
+    format_options: Dict
+    callback: Optional[Callable] = None
+    process: Optional[subprocess.Popen] = None
+    status: str = "pending"
+    progress: float = 0.0
+    error: Optional[str] = None
 
 class MediaDownloader:
     def __init__(self):
         self.setup_logging()
         self.yt_dlp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin", "yt-dlp")
         self.ensure_directories()
+        self.active_downloads: Dict[str, DownloadTask] = {}
+        self.download_queue = queue.Queue()
+        self.executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS)
+        self._stop_event = threading.Event()
 
     def setup_logging(self):
         """Configura o sistema de logging."""

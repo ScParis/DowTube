@@ -3,12 +3,16 @@ import shutil
 import re
 from .config import VALID_URL_REGEX, MIN_DISK_SPACE
 
+class ValidationError(Exception):
+    """Exceção customizada para erros de validação."""
+    pass
+
 def validate_url(url):
     """Valida a URL do YouTube."""
     if not url:
-        raise ValueError("URL não pode estar vazia")
+        raise ValidationError("URL não pode estar vazia")
     if not re.match(VALID_URL_REGEX, url):
-        raise ValueError("URL inválida. Deve ser uma URL válida do YouTube")
+        raise ValidationError("URL inválida. Deve ser uma URL válida do YouTube")
     return True
 
 def check_disk_space(path):

@@ -75,6 +75,7 @@ class DownloaderGUI:
         help_menu.add_command(label="Sobre", command=self.show_about)
 
     def create_download_tab(self):
+        """Cria a aba de download."""
         tab = ctk.CTkFrame(self.notebook)
         self.notebook.add(tab, text="Download")
 
@@ -130,6 +131,7 @@ class DownloaderGUI:
         return tab
 
     def create_playlist_tab(self):
+        """Cria a aba de playlist."""
         tab = ctk.CTkFrame(self.notebook)
         self.notebook.add(tab, text="Playlist")
 
@@ -176,6 +178,7 @@ class DownloaderGUI:
         return tab
 
     def create_favorites_tab(self):
+        """Cria a aba de favoritos."""
         tab = ctk.CTkFrame(self.notebook)
         self.notebook.add(tab, text="Favoritos")
 
@@ -201,6 +204,7 @@ class DownloaderGUI:
         return tab
 
     def create_schedule_tab(self):
+        """Cria a aba de agendamento."""
         tab = ctk.CTkFrame(self.notebook)
         self.notebook.add(tab, text="Agendamento")
 
@@ -238,6 +242,7 @@ class DownloaderGUI:
         return tab
 
     def create_settings_tab(self):
+        """Cria a aba de configurações."""
         tab = ctk.CTkFrame(self.notebook)
         self.notebook.add(tab, text="Configurações")
 
@@ -277,6 +282,7 @@ class DownloaderGUI:
         return tab
 
     def create_status_bar(self):
+        """Cria a barra de status."""
         status_frame = ctk.CTkFrame(self.root)
         status_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=5, pady=2)
         
@@ -400,6 +406,328 @@ class DownloaderGUI:
 
         # Fecha a janela
         window.destroy()
+
+    def create_download_tab(self):
+        """Cria a aba de download."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Download")
+
+        # URL
+        url_frame = ttk.LabelFrame(tab, text="URL do Vídeo")
+        url_frame.pack(fill="x", padx=10, pady=5)
+
+        self.url_entry = ttk.Entry(url_frame)
+        self.url_entry.pack(fill="x", padx=5, pady=5)
+
+        # Formato
+        format_frame = ttk.LabelFrame(tab, text="Formato")
+        format_frame.pack(fill="x", padx=10, pady=5)
+
+        self.format_var = tk.StringVar(value=list(FORMATS.keys())[0])
+        for format_type in FORMATS.keys():
+            ttk.Radiobutton(format_frame, text=format_type.title(),
+                          value=format_type, variable=self.format_var).pack(padx=5, pady=2)
+
+        # Progresso
+        progress_frame = ttk.LabelFrame(tab, text="Progresso")
+        progress_frame.pack(fill="x", padx=10, pady=5)
+
+        self.progress_bar = ttk.Progressbar(progress_frame, mode="determinate")
+        self.progress_bar.pack(fill="x", padx=5, pady=5)
+
+        self.status_label = ttk.Label(progress_frame, text="")
+        self.status_label.pack(padx=5, pady=5)
+
+        # Botões
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(pady=10)
+
+        ttk.Button(button_frame, text="Download",
+                  command=self.start_download).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancelar",
+                  command=self.cancel_download).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Limpar",
+                  command=self.clear_fields).pack(side="left", padx=5)
+
+        return tab
+
+    def create_playlist_tab(self):
+        """Cria a aba de playlist."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Playlist")
+
+        # URL
+        url_frame = ttk.LabelFrame(tab, text="URL da Playlist")
+        url_frame.pack(fill="x", padx=10, pady=5)
+
+        self.playlist_url_entry = ttk.Entry(url_frame)
+        self.playlist_url_entry.pack(fill="x", padx=5, pady=5)
+
+        # Opções
+        options_frame = ttk.LabelFrame(tab, text="Opções")
+        options_frame.pack(fill="x", padx=10, pady=5)
+
+        self.download_all_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(options_frame, text="Baixar todos os vídeos",
+                       variable=self.download_all_var).pack(padx=5, pady=2)
+
+        # Progresso
+        progress_frame = ttk.LabelFrame(tab, text="Progresso")
+        progress_frame.pack(fill="x", padx=10, pady=5)
+
+        self.playlist_progress = ttk.Progressbar(progress_frame, mode="determinate")
+        self.playlist_progress.pack(fill="x", padx=5, pady=5)
+
+        self.playlist_status = ttk.Label(progress_frame, text="")
+        self.playlist_status.pack(padx=5, pady=5)
+
+        # Botões
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(pady=10)
+
+        ttk.Button(button_frame, text="Download",
+                  command=self.start_playlist_download).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancelar",
+                  command=self.cancel_playlist_download).pack(side="left", padx=5)
+
+        return tab
+
+    def create_favorites_tab(self):
+        """Cria a aba de favoritos."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Favoritos")
+
+        # Lista de favoritos
+        favorites_frame = ttk.LabelFrame(tab, text="Meus Favoritos")
+        favorites_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.favorites_listbox = tk.Listbox(favorites_frame)
+        self.favorites_listbox.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Botões
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(pady=10)
+
+        ttk.Button(button_frame, text="Adicionar",
+                  command=self.add_favorite).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Remover",
+                  command=self.remove_favorite).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Download",
+                  command=self.download_favorite).pack(side="left", padx=5)
+
+        return tab
+
+    def create_schedule_tab(self):
+        """Cria a aba de agendamento."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Agendamento")
+
+        # URL
+        url_frame = ttk.LabelFrame(tab, text="URL do Vídeo")
+        url_frame.pack(fill="x", padx=10, pady=5)
+
+        self.schedule_url_entry = ttk.Entry(url_frame)
+        self.schedule_url_entry.pack(fill="x", padx=5, pady=5)
+
+        # Data e Hora
+        datetime_frame = ttk.LabelFrame(tab, text="Data e Hora")
+        datetime_frame.pack(fill="x", padx=10, pady=5)
+
+        self.schedule_date = ttk.Entry(datetime_frame)
+        self.schedule_date.pack(fill="x", padx=5, pady=5)
+        self.schedule_date.insert(0, datetime.now().strftime("%Y-%m-%d"))
+
+        self.schedule_time = ttk.Entry(datetime_frame)
+        self.schedule_time.pack(fill="x", padx=5, pady=5)
+        self.schedule_time.insert(0, datetime.now().strftime("%H:%M"))
+
+        # Lista de downloads agendados
+        scheduled_frame = ttk.LabelFrame(tab, text="Downloads Agendados")
+        scheduled_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.scheduled_listbox = tk.Listbox(scheduled_frame)
+        self.scheduled_listbox.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Botões
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(pady=10)
+
+        ttk.Button(button_frame, text="Agendar",
+                  command=self.schedule_download).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Remover",
+                  command=self.remove_scheduled).pack(side="left", padx=5)
+
+        return tab
+
+    def create_settings_tab(self):
+        """Cria a aba de configurações."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Configurações")
+
+        # Tema
+        theme_frame = ttk.LabelFrame(tab, text="Tema")
+        theme_frame.pack(fill="x", padx=10, pady=5)
+
+        self.theme_var = tk.StringVar(value=self.current_theme)
+        ttk.Radiobutton(theme_frame, text="Claro", value="light",
+                       variable=self.theme_var, command=lambda: self.apply_theme("light")).pack(padx=5, pady=2)
+        ttk.Radiobutton(theme_frame, text="Escuro", value="dark",
+                       variable=self.theme_var, command=lambda: self.apply_theme("dark")).pack(padx=5, pady=2)
+
+        # Diretório de Downloads
+        dir_frame = ttk.LabelFrame(tab, text="Diretório de Downloads")
+        dir_frame.pack(fill="x", padx=10, pady=5)
+
+        self.download_dir = ttk.Entry(dir_frame)
+        self.download_dir.pack(fill="x", side="left", expand=True, padx=5, pady=5)
+        self.download_dir.insert(0, str(DOWNLOADS_DIR))
+
+        ttk.Button(dir_frame, text="Procurar",
+                  command=self.choose_download_dir).pack(side="right", padx=5, pady=5)
+
+        return tab
+
+    def create_status_bar(self):
+        """Cria a barra de status."""
+        status_bar = ttk.Frame(self.root)
+        status_bar.pack(fill="x", side="bottom", padx=5, pady=2)
+
+        self.status_text = ttk.Label(status_bar, text="Pronto")
+        self.status_text.pack(side="left")
+
+        return status_bar
+
+    def apply_theme(self, theme):
+        """Aplica o tema selecionado."""
+        self.current_theme = theme
+        if theme == "dark":
+            ctk.set_appearance_mode("dark")
+        else:
+            ctk.set_appearance_mode("light")
+
+    def choose_download_dir(self):
+        """Abre diálogo para escolher diretório de downloads."""
+        dir_path = filedialog.askdirectory(initialdir=str(DOWNLOADS_DIR))
+        if dir_path:
+            self.download_dir.delete(0, tk.END)
+            self.download_dir.insert(0, dir_path)
+
+    def start_download(self):
+        """Inicia o download do vídeo."""
+        url = self.url_entry.get().strip()
+        format_type = self.format_var.get()
+
+        try:
+            self.downloader.download(url, format_type, self.update_progress)
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+
+    def cancel_download(self):
+        """Cancela o download atual."""
+        self.downloader.cancel_download()
+        self.status_label.configure(text="Download cancelado")
+        self.progress_bar.set(0)
+
+    def update_progress(self, progress, status):
+        """Atualiza a barra de progresso e status."""
+        if progress is not None:
+            self.progress_bar["value"] = progress
+        if status:
+            self.status_label.configure(text=status)
+
+    def start_playlist_download(self):
+        """Inicia o download da playlist."""
+        url = self.playlist_url_entry.get().strip()
+        download_all = self.download_all_var.get()
+
+        try:
+            self.downloader.download_playlist(url, download_all, self.update_playlist_progress)
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+
+    def cancel_playlist_download(self):
+        """Cancela o download da playlist."""
+        self.downloader.cancel_playlist_download()
+        self.playlist_status.configure(text="Download cancelado")
+        self.playlist_progress.set(0)
+
+    def update_playlist_progress(self, progress, status):
+        """Atualiza o progresso da playlist."""
+        if progress is not None:
+            self.playlist_progress["value"] = progress
+        if status:
+            self.playlist_status.configure(text=status)
+
+    def load_favorites(self):
+        """Carrega a lista de favoritos."""
+        try:
+            with open(FAVORITES_DIR / "favorites.json", "r") as f:
+                return json.load(f)
+        except:
+            return []
+
+    def save_favorites(self):
+        """Salva a lista de favoritos."""
+        os.makedirs(FAVORITES_DIR, exist_ok=True)
+        with open(FAVORITES_DIR / "favorites.json", "w") as f:
+            json.dump(self.favorites, f)
+
+    def add_favorite(self):
+        """Adiciona URL aos favoritos."""
+        url = self.url_entry.get().strip()
+        if url and url not in self.favorites:
+            self.favorites.append(url)
+            self.favorites_listbox.insert(tk.END, url)
+            self.save_favorites()
+
+    def remove_favorite(self):
+        """Remove URL dos favoritos."""
+        selection = self.favorites_listbox.curselection()
+        if selection:
+            url = self.favorites_listbox.get(selection)
+            self.favorites.remove(url)
+            self.favorites_listbox.delete(selection)
+            self.save_favorites()
+
+    def download_favorite(self):
+        """Baixa o vídeo favorito selecionado."""
+        selection = self.favorites_listbox.curselection()
+        if selection:
+            url = self.favorites_listbox.get(selection)
+            self.url_entry.delete(0, tk.END)
+            self.url_entry.insert(0, url)
+            self.start_download()
+
+    def schedule_download(self):
+        """Agenda um download."""
+        url = self.schedule_url_entry.get().strip()
+        date_str = self.schedule_date.get()
+        time_str = self.schedule_time.get()
+
+        try:
+            schedule_time = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+            if schedule_time <= datetime.now():
+                raise ValueError("Data/hora deve ser no futuro")
+
+            schedule_info = {
+                "url": url,
+                "time": schedule_time.strftime("%Y-%m-%d %H:%M"),
+                "format": self.format_var.get()
+            }
+
+            self.scheduled_downloads.append(schedule_info)
+            self.scheduled_listbox.insert(tk.END, f"{url} - {schedule_time}")
+            self.schedule_url_entry.delete(0, tk.END)
+
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+
+    def remove_scheduled(self):
+        """Remove um download agendado."""
+        selection = self.scheduled_listbox.curselection()
+        if selection:
+            self.scheduled_downloads.pop(selection[0])
+            self.scheduled_listbox.delete(selection)
 
 if __name__ == "__main__":
     app = DownloaderGUI()
