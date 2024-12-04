@@ -6,11 +6,12 @@ import json
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any
+import subprocess
 
 from .downloader import MediaDownloader, DownloadError
 from .config import (
     FORMATS, THEMES, DOWNLOAD_SETTINGS, 
-    PLAYLIST_SETTINGS, FAVORITES_DIR
+    PLAYLIST_SETTINGS, FAVORITES_DIR, DOWNLOADS_DIR
 )
 
 class DownloaderGUI:
@@ -334,6 +335,15 @@ class DownloaderGUI:
         self.format_var.set(list(FORMATS.keys())[0])
         self.progress_bar.set(0)
         self.status_label.configure(text="")
+
+    def open_downloads(self):
+        """Abre a pasta de downloads no explorador de arquivos."""
+        downloads_path = os.path.abspath(DOWNLOADS_DIR)
+        if os.path.exists(downloads_path):
+            if os.name == 'nt':  # Windows
+                os.startfile(downloads_path)
+            elif os.name == 'posix':  # Linux/Mac
+                subprocess.run(['xdg-open', downloads_path])
 
     def run(self):
         self.root.mainloop()
