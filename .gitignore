@@ -68,9 +68,17 @@ desktop.ini
 config.local.py
 .env.local
 *.local.yml
+config.local.json
+.my-yt-down/
 
 # Temporary files
 *.tmp
 *.bak
 *.swp
 *~
+
+# Build e pacotes
+*.deb
+*.spec
+debian/
+build_venv/

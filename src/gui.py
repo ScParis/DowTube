@@ -12,6 +12,7 @@ import subprocess
 import sys
 import logging
 import json
+from src.utils.file_opener import open_logs_directory
 
 from .downloader import MediaDownloader, DownloadError
 from .config import (
@@ -43,7 +44,7 @@ class DownloaderGUI(ctk.CTk):
         ctk.set_default_color_theme("blue")
         
         self.title("YouTube Downloader")
-        self.geometry("700x800")
+        self.geometry("800x600")
         self.minsize(700, 800)
         
         # Initialize
@@ -52,8 +53,101 @@ class DownloaderGUI(ctk.CTk):
         self.downloader = MediaDownloader(download_dir=self.download_dir)
         self.active_downloads = {}
         
+        # Create menu
+        self.create_menu()
+        
         # Setup interface
         self.create_widgets()
+    
+    def create_menu(self):
+        """Cria a barra de menu."""
+        # Frame para o menu
+        menu_frame = ctk.CTkFrame(self)
+        menu_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Botão de Ajuda
+        help_button = ctk.CTkButton(
+            menu_frame,
+            text="?",
+            width=30,
+            command=self.show_help
+        )
+        help_button.pack(side="right", padx=5)
+        
+        # Botão de Logs
+        logs_button = ctk.CTkButton(
+            menu_frame,
+            text="📋 Logs",
+            width=80,
+            command=self.open_logs
+        )
+        logs_button.pack(side="right", padx=5)
+    
+    def open_logs(self):
+        """Abre o diretório de logs."""
+        if not open_logs_directory():
+            # Se falhar ao abrir, mostrar mensagem de erro
+            self.show_error("Não foi possível abrir o diretório de logs.\nVerifique o console para mais detalhes.")
+    
+    def show_help(self):
+        """Mostra a janela de ajuda."""
+        help_window = ctk.CTkToplevel(self)
+        help_window.title("Ajuda")
+        help_window.geometry("600x400")
+        
+        # Texto de ajuda
+        help_text = ctk.CTkTextbox(help_window)
+        help_text.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        help_content = """
+        YouTube Downloader - Ajuda
+        
+        1. Como usar:
+           - Cole a URL do vídeo do YouTube
+           - Escolha o formato desejado
+           - Selecione a qualidade
+           - Clique em Download
+        
+        2. Formatos suportados:
+           - Vídeo: MP4, WebM, MKV
+           - Áudio: MP3, AAC, Opus
+        
+        3. Logs de erro:
+           - Clique no botão "📋 Logs" para acessar os logs
+           - Os logs são salvos em ~/.my-yt-down/logs/
+           - Cada arquivo de log é nomeado com a data
+        
+        4. Em caso de problemas:
+           - Verifique os logs de erro
+           - Certifique-se de ter uma conexão estável
+           - Verifique se o vídeo está disponível
+           - Verifique as permissões de escrita
+        """
+        
+        help_text.insert("1.0", help_content)
+        help_text.configure(state="disabled")
+    
+    def show_error(self, message):
+        """Mostra uma mensagem de erro."""
+        error_window = ctk.CTkToplevel(self)
+        error_window.title("Erro")
+        error_window.geometry("400x200")
+        
+        # Mensagem de erro
+        error_label = ctk.CTkLabel(
+            error_window,
+            text=message,
+            wraplength=350
+        )
+        error_label.pack(expand=True, padx=20, pady=20)
+        
+        # Botão de fechar
+        close_button = ctk.CTkButton(
+            error_window,
+            text="Fechar",
+            command=error_window.destroy
+        )
+        close_button.pack(pady=10)
     
     def create_widgets(self):
         """Create and arrange all GUI elements.
