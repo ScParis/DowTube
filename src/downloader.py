@@ -11,12 +11,12 @@ from typing import Dict, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from .config import (
+from config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
     LOG_DIR, DOWNLOADS_DIR, CHUNK_SIZE, DOWNLOAD_TIMEOUT, MAX_DOWNLOAD_SIZE,
     PREVIEW_DURATION
 )
-from .utils import (
+from utils import (
     validate_url, check_disk_space, sanitize_filename,
     ValidationError
 )
@@ -135,7 +135,7 @@ class MediaDownloader:
         except json.JSONDecodeError as e:
             raise DownloadError(f"Erro ao decodificar informações: {str(e)}")
 
-    def download_media(self, url, output_path, format_info, progress_callback=None):
+    def download_media(self, url, output_path, format_info, callback=None):
         """Download media from YouTube URL with specified format options.
         
         Args:
@@ -145,7 +145,7 @@ class MediaDownloader:
                 Required keys:
                 - format_type: "video" or "audio"
                 - format_name: Format name from VIDEO_FORMATS or AUDIO_FORMATS
-            progress_callback (callable, optional): Function to call with download progress
+            callback (callable, optional): Function to call with download progress
                 The function should accept a float parameter (progress percentage)
         
         Returns:
@@ -160,7 +160,7 @@ class MediaDownloader:
                 url=url,
                 output_path=output_path,
                 format_options=format_info,
-                progress_callback=progress_callback
+                callback=callback
             )
             
             self.logger.info(f"Starting download: {task.url}")
@@ -242,8 +242,8 @@ class MediaDownloader:
                 if "[download]" in line and "%" in line:
                     try:
                         progress = float(line.split("%")[0].split()[-1])
-                        if task.progress_callback:
-                            task.progress_callback(progress)
+                        if task.callback:
+                            task.callback(progress)
                     except (ValueError, IndexError):
                         pass
             

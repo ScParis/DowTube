@@ -12,10 +12,11 @@ import subprocess
 import sys
 import logging
 import json
-from src.utils.file_opener import open_logs_directory
+import platform
+from utils.file_opener import open_logs_directory, get_logs_dir
 
-from .downloader import MediaDownloader, DownloadError
-from .config import (
+from downloader import MediaDownloader, DownloadError
+from config import (
     FORMATS, DOWNLOADS_DIR, AUDIO_QUALITIES,
     VIDEO_QUALITIES, MAX_CONCURRENT_DOWNLOADS, BASE_DIR
 )

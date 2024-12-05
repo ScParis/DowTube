@@ -1,7 +1,9 @@
 import customtkinter as ctk
 import os
-from src.gui import DownloaderGUI
-from src.error_reporter import setup_error_handling
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+from gui import DownloaderGUI
+from error_reporter import setup_error_handling
 
 def main():
     try:

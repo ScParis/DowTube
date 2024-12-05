@@ -2,7 +2,7 @@ import os
 import shutil
 import re
 from pathlib import Path
-from .config import VALID_URL_REGEX, MIN_DISK_SPACE
+from config import VALID_URL_REGEX, MIN_DISK_SPACE
 
 class ValidationError(Exception):
     """Exceção customizada para erros de validação."""
