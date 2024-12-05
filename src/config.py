@@ -27,7 +27,7 @@ RETRY_DELAY = 5  # segundos
 
 # Validação
 MIN_DISK_SPACE = 1024 * 1024 * 1024  # 1 GB em bytes
-VALID_URL_REGEX = r'^(https?://)?(www\.)?(youtube\.com|youtu\.be)/.+$'
+VALID_URL_REGEX = r'^(https?://)?(www\.)?(music\.youtube\.com|youtube\.com|youtu\.be)/.+$'
 
 # Formatos de download disponíveis
 FORMATS = {

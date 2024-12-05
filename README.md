@@ -90,51 +90,42 @@ brew install --cask tcl-tk
 
 ### Método 1: Instalação via .deb (Recomendado para Ubuntu/Debian)
 
-1. Baixe o arquivo .deb mais recente da seção de releases
-2. Instale usando:
+1. Clone o repositório e construa o pacote:
+```bash
+git clone https://github.com/seu-usuario/my-yt-down.git
+cd my-yt-down
+sudo ./build_deb.sh
+```
+
+2. Instale o pacote gerado:
 ```bash
 sudo dpkg -i my-yt-down.deb
 sudo apt-get install -f  # Para resolver dependências se necessário
 ```
 
-Após a instalação, você pode:
-- Executar o programa pelo terminal: `my-yt-down`
-- Encontrar o programa no menu de aplicativos
-- Criar um atalho na área de trabalho
+3. Adicione as permissões necessárias:
+```bash
+sudo chmod +x /usr/local/bin/my-yt-down
+sudo chmod +x /usr/lib/my-yt-down/my-yt-down
+```
 
-### Método 2: Instalação via Script
+4. Execute o programa:
+```bash
+my-yt-down
+```
+
+### Método 2: Instalação Manual (Outros sistemas Linux)
 
 1. Clone o repositório:
 ```bash
-git clone https://github.com/yourusername/youtube-downloader.git
-cd youtube-downloader
-```
-
-2. Execute o script de instalação:
-```bash
-chmod +x install.sh
-./install.sh
-```
-
-O script irá automaticamente:
-- Criar e ativar um ambiente virtual
-- Instalar todas as dependências Python
-- Instalar o FFmpeg se necessário
-
-### Método 3: Instalação Manual
-
-Se preferir instalar manualmente:
-
-1. Clone o repositório:
-```bash
-git clone https://github.com/yourusername/youtube-downloader.git
-cd youtube-downloader
+git clone https://github.com/seu-usuario/my-yt-down.git
+cd my-yt-down
 ```
 
 2. Crie e ative um ambiente virtual:
 ```bash
-python -m venv venv
-source venv/bin/activate  # No Windows: .\venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate
 ```
 
 3. Instale as dependências:
@@ -142,17 +133,96 @@ source venv/bin/activate  # No Windows: .\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Instale o FFmpeg:
-- **Linux**:
-  ```bash
-  sudo apt-get install ffmpeg  # Ubuntu/Debian
-  sudo pacman -S ffmpeg       # Arch Linux
-  ```
-- **Windows**: Baixe do [site do FFmpeg](https://ffmpeg.org/download.html)
-- **macOS**:
-  ```bash
-  brew install ffmpeg
-  ```
+4. Execute o programa:
+```bash
+python3 src/gui.py
+```
+
+## Resolução de Problemas Comuns
+
+### 1. Erro de Permissão Negada
+Se você encontrar o erro "Permissão negada" ao executar `my-yt-down`, tente:
+
+```bash
+# Verificar permissões
+sudo chmod +x /usr/local/bin/my-yt-down
+sudo chmod +x /usr/lib/my-yt-down/my-yt-down
+
+# Se o erro persistir, edite o script de inicialização
+sudo nano /usr/local/bin/my-yt-down
+```
+
+Conteúdo do script deve ser:
+```bash
+#!/bin/bash
+cd /usr/lib/my-yt-down
+/usr/lib/my-yt-down/my-yt-down "$@"
+```
+
+### 2. Erro de Módulo Não Encontrado
+Se encontrar erros de módulo não encontrado, como "No module named 'customtkinter'":
+
+```bash
+# Instale as dependências Python
+pip install -r requirements.txt
+
+# Ou instale manualmente
+pip install customtkinter
+pip install yt-dlp
+```
+
+### 3. Erro de URL Inválida
+A aplicação suporta os seguintes formatos de URL:
+- YouTube: `https://(www.)youtube.com/...`
+- YouTube Short: `https://youtu.be/...`
+- YouTube Music: `https://(www.)music.youtube.com/...`
+
+### 4. Problemas com FFmpeg
+Se encontrar erros relacionados ao FFmpeg:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# Fedora
+sudo dnf install ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
+```
+
+### 5. Atualizando a Aplicação
+
+Para atualizar a aplicação para a versão mais recente:
+
+1. Atualize o repositório:
+```bash
+cd my-yt-down
+git pull origin main
+```
+
+2. Reconstrua e reinstale o pacote:
+```bash
+sudo ./build_deb.sh
+sudo dpkg -i my-yt-down.deb
+```
+
+3. Verifique as permissões:
+```bash
+sudo chmod +x /usr/local/bin/my-yt-down
+sudo chmod +x /usr/lib/my-yt-down/my-yt-down
+```
+
+## Logs e Depuração
+
+Os logs da aplicação podem ser encontrados em:
+- Logs principais: `/home/seu-usuario/my-yt-down/logs/downloader.log`
+- Logs de download: `/home/seu-usuario/my-yt-down/logs/download.log`
+
+Para visualizar os logs em tempo real:
+```bash
+tail -f /home/seu-usuario/my-yt-down/logs/downloader.log
+```
 
 ## Uso
 
@@ -162,7 +232,7 @@ pip install -r requirements.txt
 
 2. Se instalado manualmente:
    ```bash
-   python main.py
+   python3 src/gui.py
    ```
 
 3. Na interface do programa:
