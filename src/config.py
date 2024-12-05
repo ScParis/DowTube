@@ -3,8 +3,9 @@ from pathlib import Path
 
 # Diretórios
 BASE_DIR = Path(__file__).parent.parent
-LOG_DIR = BASE_DIR / "logs"
-DOWNLOADS_DIR = BASE_DIR / "downloads"
+LOG_DIR = BASE_DIR / "logs"  # Diretório para logs
+TEMP_DOWNLOADS_DIR = BASE_DIR / "temp_downloads"  # Diretório temporário para downloads
+DOWNLOADS_DIR = BASE_DIR / "downloads"  # Diretório para downloads finais
 FAVORITES_DIR = BASE_DIR / "favorites"
 
 # Configurações de download

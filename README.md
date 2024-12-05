@@ -1,40 +1,72 @@
-# DowTube
+# YouTube Downloader
 
-A modern, feature-rich YouTube downloader with a beautiful graphical interface built with CustomTkinter.
+A modern, user-friendly YouTube media downloader with support for multiple formats and qualities.
 
 ## Features
 
-- 🎵 Download audio (MP3) and video (MP4)
-- 🎨 Modern, dark-themed interface with CustomTkinter
-- 📊 Multiple quality options for both audio and video
-- 🔄 Parallel downloads with queue management
-- 📑 Playlist download support
-- ⭐ Favorites management
-- 📅 Download scheduling
-- ⚙️ Customizable settings
-- 🎯 Media preview capabilities
-- 📝 Detailed logging and error handling
-- 🚀 Performance optimized
-- 💾 Smart disk space management
+- **Simple Interface**: Clean, intuitive GUI for easy downloads
+- **Multiple Format Support**:
+  - **Video Formats**:
+    - MP4 (High/Medium/Low quality)
+    - WebM (High/Medium/Low quality)
+    - MKV (High/Medium/Low quality)
+  - **Audio Formats**:
+    - MP3 (High/Medium/Low quality)
+    - AAC (High/Medium/Low quality)
+    - Opus (High/Medium/Low quality)
+- **Quality Options**:
+  - Video:
+    - High: Best available quality
+    - Medium: 720p
+    - Low: 480p
+  - Audio:
+    - High: Best bitrate (320kbps for MP3)
+    - Medium: Medium bitrate (192kbps for MP3)
+    - Low: Lower bitrate (128kbps for MP3)
+- **Progress Tracking**: Real-time download progress monitoring
+- **Custom Save Location**: Choose where to save your downloads
+- **Error Handling**: Clear error messages and status updates
 
 ## Requirements
 
-- Python 3.10+
-- FFmpeg (for media processing)
-- System dependencies listed in requirements.txt
+- Python 3.12 or higher
+- FFmpeg (for audio extraction and format conversion)
 
-## Quick Start
+## Installation
 
-1. Clone the repository:
+### Método Automático (Recomendado)
+
+1. Clone o repositório:
 ```bash
-git clone https://github.com/yourusername/DowTube.git
-cd DowTube
+git clone https://github.com/yourusername/youtube-downloader.git
+cd youtube-downloader
 ```
 
-2. Create and activate virtual environment:
+2. Execute o script de instalação:
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+O script irá automaticamente:
+- Criar e ativar um ambiente virtual
+- Instalar todas as dependências Python
+- Instalar o FFmpeg se necessário
+
+### Método Manual
+
+Se preferir instalar manualmente, siga estes passos:
+
+1. Clone o repositório:
+```bash
+git clone https://github.com/yourusername/youtube-downloader.git
+cd youtube-downloader
+```
+
+2. Create and activate a virtual environment:
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 ```
 
 3. Install dependencies:
@@ -42,43 +74,76 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Run the application:
+4. Install FFmpeg:
+- **Linux**:
+  ```bash
+  sudo apt-get install ffmpeg  # Ubuntu/Debian
+  sudo pacman -S ffmpeg       # Arch Linux
+  ```
+- **Windows**: Download from [FFmpeg website](https://ffmpeg.org/download.html)
+- **macOS**:
+  ```bash
+  brew install ffmpeg
+  ```
+
+## Usage
+
+1. Run the application:
 ```bash
 python main.py
 ```
 
-## Documentation
-
-- [User Guide](docs/USAGE.md)
-- [Changelog](CHANGES.rst)
+2. Enter a YouTube URL
+3. Choose save location
+4. Select format (Video/Audio)
+5. Choose specific format (MP4/WebM/MKV or MP3/AAC/Opus)
+6. Select quality (High/Medium/Low)
+7. Click Download
 
 ## Project Structure
 
 ```
-DowTube/
-├── src/                    # Source code
-│   ├── __init__.py
-│   ├── config.py          # Configuration settings
-│   ├── downloader.py      # Download functionality
-│   ├── gui.py            # User interface
-│   └── utils.py          # Utility functions
-├── tests/                 # Test suite
-├── docs/                  # Documentation
-├── downloads/            # Default download directory
-├── logs/                 # Application logs
-└── favorites/           # Saved favorites
+youtube-downloader/
+├── main.py           # Application entry point
+├── requirements.txt  # Python dependencies
+├── src/
+│   ├── gui.py       # GUI implementation
+│   ├── downloader.py # Download handling
+│   └── config.py    # Configuration management
+└── downloads/       # Default download directory
 ```
+
+## Dependencies
+
+- customtkinter: Modern GUI framework
+- yt-dlp: YouTube download functionality
+- ffmpeg-python: Media processing
+- Pillow: Image handling for GUI
+
+## Configuration
+
+- Default download location: `~/Downloads`
+- Configuration file: `config.json`
+- Supports custom save locations
+- Format preferences are saved between sessions
+
+## Error Handling
+
+The application includes comprehensive error handling for:
+- Invalid URLs
+- Network issues
+- Format conversion problems
+- Disk space issues
+- Permission errors
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- CustomTkinter for the modern UI framework
-- yt-dlp for the robust download capabilities
-- FFmpeg for media processing

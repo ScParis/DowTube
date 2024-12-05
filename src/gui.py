@@ -1,6 +1,6 @@
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import customtkinter as ctk
 from PIL import Image, ImageTk
 import threading
@@ -10,448 +10,399 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import subprocess
 import sys
+import logging
+import json
 
 from .downloader import MediaDownloader, DownloadError
 from .config import (
     FORMATS, DOWNLOADS_DIR, AUDIO_QUALITIES,
-    VIDEO_QUALITIES, MAX_CONCURRENT_DOWNLOADS
+    VIDEO_QUALITIES, MAX_CONCURRENT_DOWNLOADS, BASE_DIR
 )
 
 class DownloaderGUI(ctk.CTk):
+    """YouTube Downloader GUI application.
+    
+    A modern, user-friendly interface for downloading YouTube videos and audio
+    with support for multiple formats and quality options.
+    
+    Features:
+        - Video downloads (MP4, WebM, MKV)
+        - Audio downloads (MP3, AAC, Opus)
+        - Multiple quality options
+        - Custom save location
+        - Download progress tracking
+        - Error handling
+    """
+    
     def __init__(self):
+        """Initialize the GUI application."""
         super().__init__()
         
-        # Configuração do tema
+        # Basic setup
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
-        self.title("DowTube - YouTube Media Downloader")
-        self.geometry("1000x700")
+        self.title("YouTube Downloader")
+        self.geometry("700x800")
+        self.minsize(700, 800)
         
-        # Inicializa o downloader
-        self.downloader = MediaDownloader()
+        # Initialize
+        self.config = self.load_config()
+        self.download_dir = self.config.get('download_dir', DOWNLOADS_DIR)
+        self.downloader = MediaDownloader(download_dir=self.download_dir)
         self.active_downloads = {}
-        self.scheduled_downloads = {}
         
-        # Carrega ícones
-        self.load_icons()
+        # Setup interface
+        self.create_widgets()
+    
+    def create_widgets(self):
+        """Create and arrange all GUI elements.
         
-        # Configura a interface
-        self.setup_gui()
-
-    def load_icons(self):
-        """Carrega os ícones do sistema."""
-        icons_dir = Path(__file__).parent.parent / "assets" / "icons"
-        self.icons = {
-            "download": self.load_icon(icons_dir / "download.png"),
-            "playlist": self.load_icon(icons_dir / "playlist.png"),
-            "favorite": self.load_icon(icons_dir / "favorite.png"),
-            "schedule": self.load_icon(icons_dir / "schedule.png"),
-            "settings": self.load_icon(icons_dir / "settings.png")
-        }
-
-    def load_icon(self, path: Path) -> ImageTk.PhotoImage:
-        """Carrega um ícone específico."""
-        if path.exists():
-            return ImageTk.PhotoImage(Image.open(path).resize((24, 24)))
-        return None
-
-    def setup_gui(self):
-        """Configura a interface principal."""
-        # Container principal
-        self.main_container = ctk.CTkFrame(self)
-        self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
+        Creates a clean, organized interface with:
+        - URL input field
+        - Download directory selection
+        - Format and quality options
+        - Download button
+        - Downloads list
+        - Status display
+        """
+        # Main container
+        main_frame = ctk.CTkFrame(self)
+        main_frame.pack(fill="both", expand=True, padx=25, pady=25)
         
-        # Barra lateral
-        self.sidebar = ctk.CTkFrame(self.main_container, width=200)
-        self.sidebar.pack(side="left", fill="y", padx=(0, 10))
-        
-        # Botões da barra lateral
-        self.create_sidebar_buttons()
-        
-        # Container de conteúdo
-        self.content = ctk.CTkFrame(self.main_container)
-        self.content.pack(side="right", fill="both", expand=True)
-        
-        # Tabs
-        self.create_tabs()
-        
-        # Barra de status
-        self.create_status_bar()
-
-    def create_sidebar_buttons(self):
-        """Cria os botões da barra lateral."""
-        buttons = [
-            ("Download", self.show_download_tab, "download"),
-            ("Playlist", self.show_playlist_tab, "playlist"),
-            ("Favoritos", self.show_favorites_tab, "favorite"),
-            ("Agendamento", self.show_schedule_tab, "schedule"),
-            ("Configurações", self.show_settings_tab, "settings")
-        ]
-        
-        for text, command, icon in buttons:
-            btn = ctk.CTkButton(
-                self.sidebar,
-                text=text,
-                command=command,
-                image=self.icons.get(icon),
-                compound="left",
-                anchor="w",
-                height=40,
-                corner_radius=10
-            )
-            btn.pack(fill="x", padx=10, pady=5)
-
-    def create_tabs(self):
-        """Cria as abas do sistema."""
-        # Frame para as abas
-        self.tab_view = ctk.CTkTabview(self.content)
-        self.tab_view.pack(fill="both", expand=True)
-        
-        # Cria as abas
-        self.create_download_tab()
-        self.create_playlist_tab()
-        self.create_favorites_tab()
-        self.create_schedule_tab()
-        self.create_settings_tab()
-
-    def create_download_tab(self):
-        """Cria a aba de download."""
-        tab = self.tab_view.add("Download")
-        
-        # Frame de entrada
-        input_frame = ctk.CTkFrame(tab)
-        input_frame.pack(fill="x", padx=10, pady=5)
-        
-        # URL
-        url_label = ctk.CTkLabel(input_frame, text="URL do YouTube:")
-        url_label.pack(anchor="w", padx=5, pady=2)
-        
-        self.url_entry = ctk.CTkEntry(input_frame, width=400)
-        self.url_entry.pack(fill="x", padx=5, pady=2)
-        
-        # Opções de formato
-        format_frame = ctk.CTkFrame(tab)
-        format_frame.pack(fill="x", padx=10, pady=5)
-        
-        # Tipo de mídia
-        media_label = ctk.CTkLabel(format_frame, text="Tipo de Mídia:")
-        media_label.pack(side="left", padx=5)
-        
-        self.media_type = tk.StringVar(value="audio")
-        audio_rb = ctk.CTkRadioButton(
-            format_frame,
-            text="Áudio",
-            variable=self.media_type,
-            value="audio",
-            command=self.update_format_options
+        # Title
+        title_label = ctk.CTkLabel(
+            main_frame,
+            text="YouTube Downloader",
+            font=("Roboto", 24, "bold")
         )
-        audio_rb.pack(side="left", padx=5)
+        title_label.pack(pady=(0, 20))
+        
+        # Content frame with consistent padding
+        content_frame = ctk.CTkFrame(main_frame)
+        content_frame.pack(fill="both", expand=True, padx=20, pady=0)
+        
+        # 1. URL Input Section
+        url_label = ctk.CTkLabel(
+            content_frame,
+            text="Video URL:",
+            font=("Roboto", 14, "bold"),
+            anchor="w"
+        )
+        url_label.pack(fill="x", pady=(0, 5))
+        
+        self.url_entry = ctk.CTkEntry(
+            content_frame,
+            height=40,
+            placeholder_text="Paste YouTube URL here..."
+        )
+        self.url_entry.pack(fill="x", pady=(0, 20))
+        
+        # 2. Download Directory Section
+        dir_label = ctk.CTkLabel(
+            content_frame,
+            text="Save Location:",
+            font=("Roboto", 14, "bold"),
+            anchor="w"
+        )
+        dir_label.pack(fill="x", pady=(0, 5))
+        
+        dir_frame = ctk.CTkFrame(content_frame)
+        dir_frame.pack(fill="x", pady=(0, 20))
+        
+        self.dir_entry = ctk.CTkEntry(dir_frame)
+        self.dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.dir_entry.insert(0, self.download_dir)
+        
+        browse_btn = ctk.CTkButton(
+            dir_frame,
+            text="Browse",
+            width=100,
+            command=self.browse_directory
+        )
+        browse_btn.pack(side="right")
+        
+        # 3. Format Options Section
+        format_label = ctk.CTkLabel(
+            content_frame,
+            text="Download Options:",
+            font=("Roboto", 14, "bold"),
+            anchor="w"
+        )
+        format_label.pack(fill="x", pady=(0, 10))
+        
+        # Format selection frame
+        format_frame = ctk.CTkFrame(content_frame)
+        format_frame.pack(fill="x", pady=(0, 20))
+        
+        # Media Type Selection
+        type_label = ctk.CTkLabel(
+            format_frame,
+            text="Type:",
+            font=("Roboto", 13),
+            width=80
+        )
+        type_label.pack(side="left", padx=10)
+        
+        self.format_type_var = tk.StringVar(value="video")
+        self.format_type_var.trace('w', self.update_format_options)
         
         video_rb = ctk.CTkRadioButton(
             format_frame,
-            text="Vídeo",
-            variable=self.media_type,
-            value="video",
-            command=self.update_format_options
+            text="Video",
+            variable=self.format_type_var,
+            value="video"
         )
-        video_rb.pack(side="left", padx=5)
+        video_rb.pack(side="left", padx=10)
         
-        # Formato
+        audio_rb = ctk.CTkRadioButton(
+            format_frame,
+            text="Audio",
+            variable=self.format_type_var,
+            value="audio"
+        )
+        audio_rb.pack(side="left", padx=10)
+        
+        # Format Options Frame
+        self.format_options_frame = ctk.CTkFrame(content_frame)
+        self.format_options_frame.pack(fill="x", pady=(0, 20))
+        
+        # Format Combobox
+        format_box_label = ctk.CTkLabel(
+            self.format_options_frame,
+            text="Format:",
+            font=("Roboto", 13),
+            width=80
+        )
+        format_box_label.pack(side="left", padx=10)
+        
         self.format_var = tk.StringVar()
         self.format_combo = ctk.CTkComboBox(
-            format_frame,
-            variable=self.format_var,
-            values=list(FORMATS["audio"].keys()),
-            command=self.update_quality_options
+            self.format_options_frame,
+            width=200,
+            variable=self.format_var
         )
-        self.format_combo.pack(side="left", padx=5)
+        self.format_combo.pack(side="left", padx=10)
         
-        # Qualidade
+        # Quality Label
+        quality_label = ctk.CTkLabel(
+            self.format_options_frame,
+            text="Quality:",
+            font=("Roboto", 13),
+            width=80
+        )
+        quality_label.pack(side="left", padx=10)
+        
+        # Quality Combobox
         self.quality_var = tk.StringVar()
         self.quality_combo = ctk.CTkComboBox(
-            format_frame,
-            variable=self.quality_var,
-            values=AUDIO_QUALITIES
+            self.format_options_frame,
+            width=120,
+            values=["High", "Medium", "Low"],
+            variable=self.quality_var
         )
-        self.quality_combo.pack(side="left", padx=5)
+        self.quality_combo.pack(side="left", padx=10)
+        self.quality_combo.set("High")
         
-        # Botão de download
-        download_btn = ctk.CTkButton(
-            tab,
+        # Initialize format options
+        self.update_format_options()
+        
+        # 4. Download Button
+        self.download_btn = ctk.CTkButton(
+            content_frame,
             text="Download",
             command=self.start_download,
-            fg_color="green",
-            hover_color="dark green"
+            height=45,
+            font=("Roboto", 14, "bold"),
+            fg_color="#00a884",
+            hover_color="#008f6c"
         )
-        download_btn.pack(pady=10)
+        self.download_btn.pack(fill="x", pady=(0, 20))
         
-        # Lista de downloads
-        downloads_frame = ctk.CTkFrame(tab)
-        downloads_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        downloads_label = ctk.CTkLabel(downloads_frame, text="Downloads Ativos:")
-        downloads_label.pack(anchor="w", padx=5, pady=2)
-        
-        self.downloads_tree = ttk.Treeview(
-            downloads_frame,
-            columns=("url", "format", "progress", "status"),
-            show="headings"
-        )
-        self.downloads_tree.heading("url", text="URL")
-        self.downloads_tree.heading("format", text="Formato")
-        self.downloads_tree.heading("progress", text="Progresso")
-        self.downloads_tree.heading("status", text="Status")
-        self.downloads_tree.pack(fill="both", expand=True, padx=5, pady=5)
-
-    def create_status_bar(self):
-        """Cria a barra de status."""
-        self.status_bar = ctk.CTkFrame(self)
-        self.status_bar.pack(fill="x", side="bottom", padx=10, pady=5)
-        
-        self.status_label = ctk.CTkLabel(
-            self.status_bar,
-            text="Pronto",
+        # 5. Downloads List
+        list_label = ctk.CTkLabel(
+            content_frame,
+            text="Downloads:",
+            font=("Roboto", 14, "bold"),
             anchor="w"
         )
-        self.status_label.pack(side="left", padx=5)
+        list_label.pack(fill="x", pady=(0, 5))
         
-        self.progress_bar = ctk.CTkProgressBar(
-            self.status_bar,
-            width=200,
-            mode="determinate"
+        self.downloads_list = ctk.CTkScrollableFrame(
+            content_frame,
+            height=200
         )
-        self.progress_bar.pack(side="right", padx=5)
-        self.progress_bar.set(0)
-
-    def show_download_tab(self):
-        """Mostra a aba de download."""
-        self.tab_view.set("Download")
-
-    def show_playlist_tab(self):
-        """Mostra a aba de playlist."""
-        self.tab_view.set("Playlist")
-
-    def show_favorites_tab(self):
-        """Mostra a aba de favoritos."""
-        self.tab_view.set("Favoritos")
-
-    def show_schedule_tab(self):
-        """Mostra a aba de agendamento."""
-        self.tab_view.set("Agendamento")
-
-    def show_settings_tab(self):
-        """Mostra a aba de configurações."""
-        self.tab_view.set("Configurações")
-
-    def update_format_options(self):
-        """Atualiza as opções de formato."""
-        if self.media_type.get() == "audio":
-            self.format_combo.configure(values=list(FORMATS["audio"].keys()))
+        self.downloads_list.pack(fill="both", expand=True)
+        
+        # 6. Status
+        self.status_label = ctk.CTkLabel(
+            content_frame,
+            text="Ready",
+            font=("Roboto", 12)
+        )
+        self.status_label.pack(pady=(10, 0))
+    
+    def update_format_options(self, *args):
+        """Update format options based on selected media type.
+        
+        Updates the format dropdown menu with appropriate options when
+        the user switches between video and audio.
+        
+        Args:
+            *args: Variable arguments (unused, required for tkinter trace)
+        """
+        format_type = self.format_type_var.get()
+        
+        if format_type == "video":
+            formats = ["MP4", "WebM", "MKV"]
         else:
-            self.format_combo.configure(values=list(FORMATS["video"].keys()))
-
-    def update_quality_options(self):
-        """Atualiza as opções de qualidade."""
-        if self.media_type.get() == "audio":
-            self.quality_combo.configure(values=AUDIO_QUALITIES)
-        else:
-            self.quality_combo.configure(values=VIDEO_QUALITIES)
-
+            formats = ["MP3", "AAC", "Opus"]
+        
+        self.format_combo.configure(values=formats)
+        self.format_combo.set(formats[0])
+    
+    def get_format_name(self):
+        """Generate format name for the downloader.
+        
+        Combines the selected format and quality into a format name
+        that matches the downloader's format definitions.
+        
+        Returns:
+            str: Format name (e.g., 'mp4_high', 'mp3_medium')
+        """
+        format_type = self.format_type_var.get()
+        format_value = self.format_combo.get().lower()
+        quality = self.quality_var.get().lower()
+        
+        return f"{format_value}_{quality}"
+    
     def start_download(self):
-        """Inicia o download."""
-        url = self.url_entry.get()
-        format_type = self.media_type.get()
-        format = self.format_var.get()
-        quality = self.quality_var.get()
-
-        if url and format_type and format and quality:
-            self.downloader.download(url, format_type, format, quality, self.update_progress)
-        else:
-            messagebox.showerror("Erro", "Preencha todos os campos")
-
-    def update_progress(self, progress, status):
-        """Atualiza o progresso."""
-        self.progress_bar.set(progress)
-        self.status_label.configure(text=status)
-
-    def create_playlist_tab(self):
-        """Cria a aba de playlist."""
-        tab = self.tab_view.add("Playlist")
+        """Start the download process.
         
-        # Frame de entrada
-        input_frame = ctk.CTkFrame(tab)
-        input_frame.pack(fill="x", padx=10, pady=5)
+        Validates input, prepares download parameters, and starts
+        the download in a background thread. Updates UI accordingly.
+        """
+        url = self.url_entry.get().strip()
+        if not url:
+            self.status_label.configure(text="Please enter a URL")
+            return
         
-        # URL
-        url_label = ctk.CTkLabel(input_frame, text="URL da Playlist:")
-        url_label.pack(anchor="w", padx=5, pady=2)
+        # Update download directory
+        self.download_dir = self.dir_entry.get().strip()
+        if not os.path.exists(self.download_dir):
+            try:
+                os.makedirs(self.download_dir)
+            except Exception as e:
+                self.status_label.configure(text=f"Error creating directory: {str(e)}")
+                return
         
-        self.playlist_url_entry = ctk.CTkEntry(input_frame, width=400)
-        self.playlist_url_entry.pack(fill="x", padx=5, pady=2)
+        try:
+            # Update UI
+            self.status_label.configure(text="Starting download...")
+            self.download_btn.configure(state="disabled")
+            
+            # Create download entry
+            download_frame = ctk.CTkFrame(self.downloads_list)
+            download_frame.pack(fill="x", padx=10, pady=5)
+            
+            title_label = ctk.CTkLabel(
+                download_frame,
+                text=url,
+                font=("Roboto", 12)
+            )
+            title_label.pack(side="left", padx=10)
+            
+            progress_label = ctk.CTkLabel(
+                download_frame,
+                text="0%",
+                font=("Roboto", 12)
+            )
+            progress_label.pack(side="right", padx=10)
+            
+            # Prepare format info
+            format_info = {
+                'format_type': self.format_type_var.get(),
+                'format_name': self.get_format_name()
+            }
+            
+            # Start download
+            thread = threading.Thread(
+                target=self.download_media,
+                args=(url, download_frame, progress_label, format_info)
+            )
+            thread.daemon = True
+            thread.start()
+            
+        except Exception as e:
+            self.status_label.configure(text=f"Error: {str(e)}")
+            self.download_btn.configure(state="normal")
+    
+    def download_media(self, url, frame, progress_label, format_info):
+        """Handle the media download process.
         
-        # Opções de download
-        options_frame = ctk.CTkFrame(tab)
-        options_frame.pack(fill="x", padx=10, pady=5)
+        Args:
+            url (str): YouTube URL to download from
+            frame (CTkFrame): Frame displaying download progress
+            progress_label (CTkLabel): Label for progress updates
+            format_info (dict): Format and quality options
+        """
+        try:
+            def progress_callback(progress):
+                progress_label.configure(text=f"{progress:.1f}%")
+            
+            # Download
+            self.downloader.download_media(
+                url=url,
+                output_path=Path(self.download_dir),
+                format_info=format_info,
+                progress_callback=progress_callback
+            )
+            
+            # Update UI
+            progress_label.configure(text="Done!")
+            self.status_label.configure(text="Download completed!")
+            
+        except Exception as e:
+            self.status_label.configure(text=f"Error: {str(e)}")
+            if frame:
+                frame.destroy()
         
-        # Download todos os vídeos
-        self.download_all_var = tk.BooleanVar(value=True)
-        download_all_cb = ctk.CTkCheckBox(
-            options_frame,
-            text="Download todos os vídeos",
-            variable=self.download_all_var
-        )
-        download_all_cb.pack(side="left", padx=5)
+        finally:
+            self.download_btn.configure(state="normal")
+    
+    def browse_directory(self):
+        """Open directory browser for save location selection.
         
-        # Botão de download
-        download_btn = ctk.CTkButton(
-            tab,
-            text="Download",
-            command=self.start_playlist_download,
-            fg_color="green",
-            hover_color="dark green"
-        )
-        download_btn.pack(pady=10)
-
-    def start_playlist_download(self):
-        """Inicia o download da playlist."""
-        url = self.playlist_url_entry.get()
-        download_all = self.download_all_var.get()
-
-        if url:
-            self.downloader.download_playlist(url, download_all, self.update_playlist_progress)
-        else:
-            messagebox.showerror("Erro", "Preencha o campo de URL")
-
-    def update_playlist_progress(self, progress, status):
-        """Atualiza o progresso da playlist."""
-        self.progress_bar.set(progress)
-        self.status_label.configure(text=status)
-
-    def create_favorites_tab(self):
-        """Cria a aba de favoritos."""
-        tab = self.tab_view.add("Favoritos")
+        Opens a system file dialog for the user to choose where
+        downloads should be saved. Updates the config when changed.
+        """
+        dir_path = filedialog.askdirectory(initialdir=self.download_dir)
+        if dir_path:
+            self.dir_entry.delete(0, tk.END)
+            self.dir_entry.insert(0, dir_path)
+            self.download_dir = dir_path
+            self.save_config()
+    
+    def load_config(self):
+        """Load application configuration from file.
         
-        # Frame de entrada
-        input_frame = ctk.CTkFrame(tab)
-        input_frame.pack(fill="x", padx=10, pady=5)
-        
-        # URL
-        url_label = ctk.CTkLabel(input_frame, text="URL do Vídeo:")
-        url_label.pack(anchor="w", padx=5, pady=2)
-        
-        self.favorite_url_entry = ctk.CTkEntry(input_frame, width=400)
-        self.favorite_url_entry.pack(fill="x", padx=5, pady=2)
-        
-        # Botão de adicionar
-        add_btn = ctk.CTkButton(
-            tab,
-            text="Adicionar",
-            command=self.add_favorite,
-            fg_color="green",
-            hover_color="dark green"
-        )
-        add_btn.pack(pady=10)
-
-    def add_favorite(self):
-        """Adiciona um vídeo aos favoritos."""
-        url = self.favorite_url_entry.get()
-
-        if url:
-            self.downloader.add_favorite(url)
-            self.favorite_url_entry.delete(0, tk.END)
-        else:
-            messagebox.showerror("Erro", "Preencha o campo de URL")
-
-    def create_schedule_tab(self):
-        """Cria a aba de agendamento."""
-        tab = self.tab_view.add("Agendamento")
-        
-        # Frame de entrada
-        input_frame = ctk.CTkFrame(tab)
-        input_frame.pack(fill="x", padx=10, pady=5)
-        
-        # URL
-        url_label = ctk.CTkLabel(input_frame, text="URL do Vídeo:")
-        url_label.pack(anchor="w", padx=5, pady=2)
-        
-        self.schedule_url_entry = ctk.CTkEntry(input_frame, width=400)
-        self.schedule_url_entry.pack(fill="x", padx=5, pady=2)
-        
-        # Data e hora
-        datetime_frame = ctk.CTkFrame(tab)
-        datetime_frame.pack(fill="x", padx=10, pady=5)
-        
-        date_label = ctk.CTkLabel(datetime_frame, text="Data:")
-        date_label.pack(side="left", padx=5)
-        
-        self.schedule_date_entry = ctk.CTkEntry(datetime_frame, width=100)
-        self.schedule_date_entry.pack(side="left", padx=5)
-        
-        time_label = ctk.CTkLabel(datetime_frame, text="Hora:")
-        time_label.pack(side="left", padx=5)
-        
-        self.schedule_time_entry = ctk.CTkEntry(datetime_frame, width=100)
-        self.schedule_time_entry.pack(side="left", padx=5)
-        
-        # Botão de agendar
-        schedule_btn = ctk.CTkButton(
-            tab,
-            text="Agendar",
-            command=self.schedule_download,
-            fg_color="green",
-            hover_color="dark green"
-        )
-        schedule_btn.pack(pady=10)
-
-    def schedule_download(self):
-        """Agenda um download."""
-        url = self.schedule_url_entry.get()
-        date = self.schedule_date_entry.get()
-        time = self.schedule_time_entry.get()
-
-        if url and date and time:
-            self.downloader.schedule_download(url, date, time)
-            self.schedule_url_entry.delete(0, tk.END)
-            self.schedule_date_entry.delete(0, tk.END)
-            self.schedule_time_entry.delete(0, tk.END)
-        else:
-            messagebox.showerror("Erro", "Preencha todos os campos")
-
-    def create_settings_tab(self):
-        """Cria a aba de configurações."""
-        tab = self.tab_view.add("Configurações")
-        
-        # Frame de configurações
-        settings_frame = ctk.CTkFrame(tab)
-        settings_frame.pack(fill="x", padx=10, pady=5)
-        
-        # Diretório de downloads
-        dir_label = ctk.CTkLabel(settings_frame, text="Diretório de Downloads:")
-        dir_label.pack(anchor="w", padx=5, pady=2)
-        
-        self.download_dir_entry = ctk.CTkEntry(settings_frame, width=400)
-        self.download_dir_entry.pack(fill="x", padx=5, pady=2)
-        
-        # Botão de salvar
-        save_btn = ctk.CTkButton(
-            tab,
-            text="Salvar",
-            command=self.save_settings,
-            fg_color="green",
-            hover_color="dark green"
-        )
-        save_btn.pack(pady=10)
-
-    def save_settings(self):
-        """Salva as configurações."""
-        dir = self.download_dir_entry.get()
-
-        if dir:
-            self.downloader.save_settings(dir)
-            self.download_dir_entry.delete(0, tk.END)
-        else:
-            messagebox.showerror("Erro", "Preencha o campo de diretório")
+        Returns:
+            dict: Configuration settings
+        """
+        config_path = Path(BASE_DIR) / "config.json"
+        if config_path.exists():
+            with open(config_path) as f:
+                return json.load(f)
+        return {}
+    
+    def save_config(self):
+        """Save current configuration to file."""
+        config_path = Path(BASE_DIR) / "config.json"
+        config = {
+            'download_dir': self.download_dir
+        }
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
 
 if __name__ == "__main__":
     app = DownloaderGUI()
