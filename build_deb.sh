@@ -6,8 +6,23 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Verificar dependências necessárias
-DEPS=("python3" "python3-dev" "python3-pip" "python3-venv" "dpkg-dev")
+# Adicionar repositório deadsnakes para Python 3.12
+echo "Adicionando repositório para Python 3.12..."
+add-apt-repository -y ppa:deadsnakes/ppa
+apt-get update
+
+# Instalar Python 3.12 e dependências
+echo "Instalando Python 3.12 e dependências..."
+apt-get install -y python3.12 python3.12-dev python3.12-venv python3.12-distutils libpython3.12 libpython3.12-dev
+
+# Verificar se Python 3.12 foi instalado corretamente
+if ! command -v python3.12 &> /dev/null; then
+    echo "Erro: Falha ao instalar Python 3.12"
+    exit 1
+fi
+
+# Verificar outras dependências necessárias
+DEPS=("python3-pip" "dpkg-dev" "ffmpeg")
 for dep in "${DEPS[@]}"; do
     if ! dpkg -l | grep -q "^ii  $dep "; then
         echo "Instalando $dep..."
@@ -25,11 +40,11 @@ mkdir -p debian/usr/lib/my-yt-down
 mkdir -p debian/usr/share/applications
 mkdir -p debian/usr/share/icons/hicolor/256x256/apps
 
-# Criar ambiente virtual temporário
-python3 -m venv build_venv
+# Criar ambiente virtual temporário com Python 3.12
+python3.12 -m venv build_venv
 source build_venv/bin/activate
 
-# Instalar dependências
+# Atualizar pip e instalar dependências
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install pyinstaller
@@ -87,7 +102,7 @@ Version: 1.0.0
 Section: utils
 Priority: optional
 Architecture: amd64
-Depends: python3 (>= 3.12), python3-tk, python3-pip, ffmpeg, libpython3.12, python3-pil
+Depends: python3.12 (>= 3.12), python3-tk, python3-pip, ffmpeg, libpython3.12, python3-pil
 Maintainer: Your Name <your.email@example.com>
 Description: YouTube Video Downloader
  A simple and efficient YouTube video downloader
