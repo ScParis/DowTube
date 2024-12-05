@@ -230,13 +230,19 @@ class MediaDownloader:
             else:
                 # Audio format
                 format_name = task.format_options.get("format_name", "mp3_high")
-                format_parts = format_name.split("_")
-                audio_format = format_parts[0]
-                quality = format_parts[1] if len(format_parts) > 1 else "high"
+                if isinstance(format_name, str):
+                    format_parts = format_name.split("_")
+                    audio_format = format_parts[0]
+                    quality = format_parts[1] if len(format_parts) > 1 else "high"
+                else:
+                    # Default to mp3 high quality if format_name is not a string
+                    audio_format = "mp3"
+                    quality = "high"
                 
                 cmd.extend([
                     "-x",  # Extract audio
-                    "--audio-format", audio_format
+                    "--audio-format", audio_format,
+                    "-f", "bestaudio/best"  # Add format selection for audio
                 ])
                 
                 # Set audio quality

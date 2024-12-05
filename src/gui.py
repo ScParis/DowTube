@@ -501,4 +501,4 @@ class DownloaderGUI(ctk.CTk):
 
 if __name__ == "__main__":
     app = DownloaderGUI()
-    app.run()
+    app.mainloop()
