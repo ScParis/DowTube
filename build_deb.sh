@@ -67,33 +67,35 @@ pyinstaller --onedir \
 
 # Copiar arquivos para a estrutura do pacote
 cp -r dist/my-yt-down/* debian/usr/lib/my-yt-down/
-cp icon.png debian/usr/share/icons/hicolor/256x256/apps/my-yt-down.png
+cp src/assets/icon.png debian/usr/share/icons/hicolor/256x256/apps/my-yt-down.png
 
-# Criar script wrapper
-cat > debian/usr/local/bin/my-yt-down << 'EOF'
+# Definir permissões corretas
+chmod 755 debian/usr/lib/my-yt-down/my-yt-down
+chmod -R 755 debian/usr/lib/my-yt-down/_internal
+chmod 755 debian/usr/local/bin/my-yt-down
+
+# Criar script de inicialização
+cat > debian/usr/local/bin/my-yt-down << 'EOL'
 #!/bin/bash
 cd /usr/lib/my-yt-down
-./my-yt-down "$@"
-EOF
+exec /usr/lib/my-yt-down/my-yt-down "$@"
+EOL
 
-chmod +x debian/usr/local/bin/my-yt-down
+# Garantir que o script de inicialização tenha as permissões corretas
+chmod 755 debian/usr/local/bin/my-yt-down
 
 # Criar arquivo .desktop
-cat > debian/usr/share/applications/my-yt-down.desktop << 'EOF'
+cat > debian/usr/share/applications/my-yt-down.desktop << EOL
 [Desktop Entry]
 Version=1.0
-Type=Application
 Name=YouTube Downloader
-GenericName=YouTube Video Downloader
-Comment=Download videos and audio from YouTube
+Comment=Download videos from YouTube
 Exec=/usr/local/bin/my-yt-down
-Icon=my-yt-down
+Icon=/usr/share/icons/hicolor/256x256/apps/my-yt-down.png
 Terminal=false
-Categories=AudioVideo;Network;
-Keywords=youtube;download;video;audio;
-StartupNotify=true
-StartupWMClass=my-yt-down
-EOF
+Type=Application
+Categories=Utility;AudioVideo;
+EOL
 
 # Criar arquivo de controle
 cat > debian/DEBIAN/control << 'EOF'
@@ -126,14 +128,6 @@ update-desktop-database
 EOF
 
 chmod +x debian/DEBIAN/postrm
-
-# Definir permissões corretas
-chown -R root:root debian/
-find debian/ -type d -exec chmod 755 {} \;
-find debian/ -type f -exec chmod 644 {} \;
-chmod 755 debian/DEBIAN/postinst
-chmod 755 debian/DEBIAN/postrm
-chmod 755 debian/usr/local/bin/my-yt-down
 
 # Criar pacote
 dpkg-deb --build debian my-yt-down.deb
