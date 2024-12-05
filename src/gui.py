@@ -449,7 +449,7 @@ class DownloaderGUI(ctk.CTk):
                 url=url,
                 output_path=Path(self.download_dir),
                 format_info=format_info,
-                progress_callback=progress_callback
+                callback=progress_callback
             )
             
             # Update UI

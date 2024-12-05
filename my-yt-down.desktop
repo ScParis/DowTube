@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=YouTube Downloader
+GenericName=YouTube Video Downloader
+Comment=Download videos and audio from YouTube
+Exec=/usr/local/bin/my-yt-down
+Icon=/usr/share/icons/my-yt-down/my-yt-down.png
+Terminal=false
+Categories=AudioVideo;Network;
+Keywords=youtube;download;video;audio;
+StartupNotify=true
+StartupWMClass=my-yt-down
