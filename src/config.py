@@ -15,6 +15,12 @@ MAX_DOWNLOAD_SIZE = 2048  # MB
 CHUNK_SIZE = 8192  # bytes
 PREVIEW_DURATION = 30  # segundos
 
+# Configurações de rate limit
+RATE_LIMIT_REQUESTS = 30  # Número máximo de requisições
+RATE_LIMIT_PERIOD = 60   # Período em segundos
+RATE_LIMIT_BURST = 10    # Tamanho máximo do burst
+RATE_LIMIT_COOLDOWN = 5  # Tempo de espera entre tentativas (segundos)
+
 # Configurações de retry
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # segundos

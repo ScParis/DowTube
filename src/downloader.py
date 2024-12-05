@@ -10,16 +10,19 @@ from pathlib import Path
 from typing import Dict, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+import uuid
 
 from config import (
     FORMATS, MAX_RETRIES, RETRY_DELAY, MAX_CONCURRENT_DOWNLOADS,
     LOG_DIR, DOWNLOADS_DIR, CHUNK_SIZE, DOWNLOAD_TIMEOUT, MAX_DOWNLOAD_SIZE,
-    PREVIEW_DURATION
+    PREVIEW_DURATION, RATE_LIMIT_REQUESTS, RATE_LIMIT_PERIOD,
+    RATE_LIMIT_BURST, RATE_LIMIT_COOLDOWN
 )
 from utils import (
     validate_url, check_disk_space, sanitize_filename,
     ValidationError
 )
+from utils.rate_limiter import RateLimiter
 
 class DownloadError(Exception):
     """Exceção customizada para erros de download."""
@@ -84,18 +87,26 @@ class MediaDownloader:
     }
     
     def __init__(self, download_dir=None):
-        """Initialize the MediaDownloader.
-        
-        Args:
-            download_dir (str or Path, optional): Directory to save downloads.
-                Defaults to user's Downloads directory.
-        """
+        """Initialize the MediaDownloader."""
         self.setup_logging()
         self.yt_dlp_path = "/home/piperun/my_yt_down/venv/bin/yt-dlp"
         self.download_dir = Path(download_dir) if download_dir else Path.home() / "Downloads"
         self.download_dir.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
-    
+        
+        # Initialize rate limiter with configured values
+        self.rate_limiter = RateLimiter(
+            rate=RATE_LIMIT_REQUESTS,
+            period=RATE_LIMIT_PERIOD,
+            burst=RATE_LIMIT_BURST,
+            cooldown=RATE_LIMIT_COOLDOWN
+        )
+        
+        # Task management
+        self.active_tasks: Dict[str, DownloadTask] = {}
+        self.task_queue = queue.Queue()
+        self.executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS)
+
     def set_download_dir(self, path: Path):
         """Define o diretório de download."""
         self.download_dir = path
@@ -121,6 +132,13 @@ class MediaDownloader:
         """Obtém informações sobre o vídeo/playlist."""
         try:
             validate_url(url)
+            
+            # Try to acquire a rate limit token
+            if not self.rate_limiter.try_acquire():
+                self.logger.warning("Rate limit reached, waiting for token...")
+                if not self.rate_limiter.acquire(timeout=DOWNLOAD_TIMEOUT):
+                    raise DownloadError("Rate limit exceeded. Please try again later.")
+            
             cmd = [
                 self.yt_dlp_path,
                 "--dump-json",
@@ -135,27 +153,19 @@ class MediaDownloader:
         except json.JSONDecodeError as e:
             raise DownloadError(f"Erro ao decodificar informações: {str(e)}")
 
-    def download_media(self, url, output_path, format_info, callback=None):
-        """Download media from YouTube URL with specified format options.
-        
-        Args:
-            url (str): YouTube URL to download from
-            output_path (Path): Directory to save the downloaded file
-            format_info (dict): Format and quality options
-                Required keys:
-                - format_type: "video" or "audio"
-                - format_name: Format name from VIDEO_FORMATS or AUDIO_FORMATS
-            callback (callable, optional): Function to call with download progress
-                The function should accept a float parameter (progress percentage)
-        
-        Returns:
-            bool: True if download was successful
-        
-        Raises:
-            Exception: If download fails or format options are invalid
-        """
+    def download_media(self, url: str, output_path: Path, format_info: Dict, callback: Optional[Callable] = None) -> None:
+        """Download media from YouTube URL with specified format options."""
         try:
-            # Create task object
+            # Try to acquire a rate limit token
+            if not self.rate_limiter.try_acquire():
+                self.logger.warning("Rate limit reached, waiting for token...")
+                if not self.rate_limiter.acquire(timeout=DOWNLOAD_TIMEOUT):
+                    raise DownloadError("Rate limit exceeded. Please try again later.")
+            
+            validate_url(url)
+            output_path = Path(output_path)
+            
+            # Create task object and add to active tasks
             task = DownloadTask(
                 url=url,
                 output_path=output_path,
@@ -163,9 +173,27 @@ class MediaDownloader:
                 callback=callback
             )
             
-            self.logger.info(f"Starting download: {task.url}")
-            self.logger.debug(f"Format options: {task.format_options}")
+            task_id = str(uuid.uuid4())
+            self.active_tasks[task_id] = task
             
+            # Start the download process
+            self._start_download(task)
+            
+        except Exception as e:
+            self.logger.error(f"Download error: {str(e)}")
+            if callback:
+                callback({"status": "error", "error": str(e)})
+            raise DownloadError(str(e))
+
+    def _start_download(self, task: DownloadTask) -> None:
+        """Start the download process for a given task."""
+        # Create a new thread for the download process
+        thread = threading.Thread(target=self._download_thread, args=(task,))
+        thread.start()
+
+    def _download_thread(self, task: DownloadTask) -> None:
+        """Download thread function."""
+        try:
             # Build command
             cmd = [
                 self.yt_dlp_path,
@@ -253,11 +281,12 @@ class MediaDownloader:
                 raise Exception(f"Download failed: {error}")
             
             self.logger.info("Download completed successfully")
-            return True
             
         except Exception as e:
             self.logger.error(f"Download error: {str(e)}")
-            raise
+            if task.callback:
+                task.callback({"status": "error", "error": str(e)})
+            raise DownloadError(str(e))
 
     def preview_media(self, url: str, format_options: Dict) -> Optional[Path]:
         """Gera uma prévia da mídia."""

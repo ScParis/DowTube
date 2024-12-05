@@ -50,8 +50,7 @@ install_system_dependencies() {
             sudo zypper install -y python3-devel python3-tk python3-pip ffmpeg
             ;;
         *)
-            echo "Sistema operacional não reconhecido."
-            echo "Por favor, instale python3-dev, python3-tk, ffmpeg manualmente para sua distribuição"
+            echo "Sistema operacional não suportado"
             exit 1
             ;;
     esac
@@ -61,105 +60,56 @@ install_system_dependencies() {
 setup_virtual_env() {
     echo "Configurando ambiente virtual..."
     
-    # Criar ambiente virtual se não existir
-    if [ ! -d "venv" ]; then
-        python3 -m venv venv
-    fi
-    
-    # Ativar ambiente virtual
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        source venv/bin/activate
-    else
-        source venv/bin/activate
-    fi
+    # Criar e ativar ambiente virtual
+    python3 -m venv venv
+    source venv/bin/activate
     
     # Atualizar pip
     pip install --upgrade pip
     
-    # Instalar dependências Python
+    # Instalar dependências
     pip install -r requirements.txt
 }
 
 # Função para criar pacote .deb (apenas Linux Debian/Ubuntu)
 create_deb_package() {
-    if [ "$(detect_os)" != "debian" ]; then
-        echo "A criação de pacote .deb só é suportada em sistemas Debian/Ubuntu"
-        exit 1
-    fi
-    
     echo "Criando pacote .deb..."
     
     # Instalar pyinstaller se necessário
     pip install pyinstaller
     
-    # Criar diretórios necessários
-    mkdir -p debian/DEBIAN
+    # Criar executável com pyinstaller
+    pyinstaller --onefile \
+                --name my-yt-down \
+                --add-data "src:src" \
+                --hidden-import tqdm \
+                --hidden-import yt_dlp \
+                --hidden-import ffmpeg \
+                --hidden-import schedule \
+                --hidden-import notify_py \
+                --hidden-import psutil \
+                main.py
+
+    # Criar estrutura de diretórios para o pacote .deb
+    rm -rf debian/usr/local/bin/*
+    rm -rf debian/usr/share/applications/*
+    rm -rf debian/usr/share/icons/my-yt-down/*
+    
     mkdir -p debian/usr/local/bin
-    mkdir -p debian/usr/lib/my-yt-down
     mkdir -p debian/usr/share/applications
-    mkdir -p debian/usr/share/icons/hicolor/256x256/apps
+    mkdir -p debian/usr/share/icons/my-yt-down
     
-    # Gerar executável com PyInstaller
-    pyinstaller --onedir \
-        --name my-yt-down \
-        --add-data "src:src" \
-        --add-data "config.json:." \
-        --hidden-import PIL \
-        --hidden-import customtkinter \
-        --hidden-import tqdm \
-        --hidden-import yt_dlp \
-        --hidden-import requests \
-        --hidden-import ffmpeg \
-        --hidden-import schedule \
-        --hidden-import notify_py \
-        --hidden-import psutil \
-        main.py
+    # Copiar arquivos
+    cp dist/my-yt-down debian/usr/local/bin/
+    cp my-yt-down.desktop debian/usr/share/applications/
+    cp icons/my-yt-down.png debian/usr/share/icons/my-yt-down/
     
-    # Copiar arquivos para a estrutura do pacote
-    cp -r dist/my-yt-down/* debian/usr/lib/my-yt-down/
+    # Definir permissões
+    chmod 755 debian/usr/local/bin/my-yt-down
+    chmod 644 debian/usr/share/applications/my-yt-down.desktop
+    chmod 644 debian/usr/share/icons/my-yt-down/my-yt-down.png
     
-    # Criar script wrapper
-    cat > debian/usr/local/bin/my-yt-down << 'EOF'
-#!/bin/bash
-cd /usr/lib/my-yt-down
-./my-yt-down "$@"
-EOF
-    
-    chmod +x debian/usr/local/bin/my-yt-down
-    
-    # Criar arquivo .desktop
-    cat > debian/usr/share/applications/my-yt-down.desktop << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=YouTube Downloader
-GenericName=YouTube Video Downloader
-Comment=Download videos and audio from YouTube
-Exec=/usr/local/bin/my-yt-down
-Icon=my-yt-down
-Terminal=false
-Categories=AudioVideo;Network;
-Keywords=youtube;download;video;audio;
-StartupNotify=true
-StartupWMClass=my-yt-down
-EOF
-    
-    # Criar arquivo de controle
-    cat > debian/DEBIAN/control << 'EOF'
-Package: my-yt-down
-Version: 1.0.0
-Section: utils
-Priority: optional
-Architecture: amd64
-Depends: python3 (>= 3.12), python3-tk, python3-pip, ffmpeg, libpython3.12, python3-pil
-Maintainer: Your Name <your.email@example.com>
-Description: YouTube Video Downloader
- A simple and efficient YouTube video downloader
- with a graphical user interface.
- Supports video and audio downloads with various quality options.
-EOF
-    
-    # Criar pacote
+    # Criar pacote .deb
     dpkg-deb --build debian my-yt-down.deb
     
     echo "Pacote .deb criado com sucesso!"
@@ -169,50 +119,36 @@ EOF
 OS=$(detect_os)
 echo "Instalador do YouTube Downloader"
 
-if [ "$OS" = "debian" ]; then
-    echo "1. Instalação completa (ambiente virtual + dependências)"
-    echo "2. Criar pacote .deb"
-    echo "3. Sair"
-    read -p "Escolha uma opção (1-3): " option
-    
-    case $option in
-        1)
+PS3="Escolha uma opção: "
+options=("Instalação completa (ambiente virtual + dependências)" "Criar pacote .deb" "Sair")
+select opt in "${options[@]}"
+do
+    case $opt in
+        "Instalação completa (ambiente virtual + dependências)")
             install_system_dependencies
             setup_virtual_env
+            if [ "$OS" = "debian" ]; then
+                create_deb_package
+                sudo dpkg -i my-yt-down.deb
+            fi
             echo "Instalação completa!"
+            break
             ;;
-        2)
-            install_system_dependencies
-            setup_virtual_env
-            create_deb_package
+        "Criar pacote .deb")
+            if [ "$OS" = "debian" ]; then
+                install_system_dependencies
+                setup_virtual_env
+                create_deb_package
+            else
+                echo "Esta opção só está disponível para sistemas Debian/Ubuntu"
+            fi
+            break
             ;;
-        3)
-            echo "Saindo..."
-            exit 0
+        "Sair")
+            break
             ;;
-        *)
+        *) 
             echo "Opção inválida"
-            exit 1
             ;;
     esac
-else
-    echo "1. Instalação completa (ambiente virtual + dependências)"
-    echo "2. Sair"
-    read -p "Escolha uma opção (1-2): " option
-    
-    case $option in
-        1)
-            install_system_dependencies
-            setup_virtual_env
-            echo "Instalação completa!"
-            ;;
-        2)
-            echo "Saindo..."
-            exit 0
-            ;;
-        *)
-            echo "Opção inválida"
-            exit 1
-            ;;
-    esac
-fi
+done
