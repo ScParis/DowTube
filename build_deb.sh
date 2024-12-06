@@ -19,7 +19,8 @@ apt-get install -y \
     python3-pil.imagetk \
     tk-dev \
     ffmpeg \
-    dpkg-dev
+    dpkg-dev \
+    imagemagick
 
 # Verificar instalação do Tkinter
 echo "Verificando instalação do Tkinter..."
@@ -42,6 +43,7 @@ mkdir -p debian/usr/local/bin
 mkdir -p debian/usr/lib/my-yt-down
 mkdir -p debian/usr/share/applications
 mkdir -p debian/usr/share/icons/hicolor/256x256/apps
+mkdir -p debian/usr/share/pixmaps
 
 # Criar e ativar ambiente virtual temporário
 echo "Criando ambiente virtual..."
@@ -98,6 +100,7 @@ deactivate
 # Copiar arquivos para a estrutura debian
 cp -r dist/my-yt-down/* debian/usr/lib/my-yt-down/
 cp src/assets/icon.png debian/usr/share/icons/hicolor/256x256/apps/my-yt-down.png
+cp src/assets/icon.png debian/usr/share/pixmaps/my-yt-down.png
 
 # Definir permissões corretas
 chmod 755 debian/usr/lib/my-yt-down/my-yt-down
@@ -158,7 +161,7 @@ Version=1.0
 Name=YouTube Downloader
 Comment=Download videos from YouTube
 Exec=/usr/local/bin/my-yt-down
-Icon=/usr/share/icons/hicolor/256x256/apps/my-yt-down.png
+Icon=my-yt-down
 Terminal=false
 Type=Application
 Categories=Utility;AudioVideo;
@@ -171,7 +174,7 @@ Version: 1.0.0
 Section: utils
 Priority: optional
 Architecture: amd64
-Depends: python3 (>= 3.10), python3-tk, python3-pil, python3-pil.imagetk, python3-pip, python3-venv, ffmpeg
+Depends: python3 (>= 3.10), python3-tk, python3-pil, python3-pil.imagetk, python3-pip, python3-venv, ffmpeg, imagemagick
 Maintainer: Your Name <your.email@example.com>
 Description: YouTube Video Downloader
  A simple and efficient YouTube video downloader with GUI interface.
