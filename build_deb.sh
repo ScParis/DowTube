@@ -100,11 +100,23 @@ chmod 755 debian/usr/local/bin/my-yt-down
 # Criar script de inicialização
 cat > debian/usr/local/bin/my-yt-down << 'EOL'
 #!/bin/bash
+set -e
+
+# Verificar se o diretório de downloads existe e tem permissões corretas
+if [ ! -d "/usr/lib/my-yt-down/downloads" ]; then
+    sudo mkdir -p /usr/lib/my-yt-down/downloads
+    sudo chmod 777 /usr/lib/my-yt-down/downloads
+fi
+
+# Verificar permissões do executável
+if [ ! -x "/usr/lib/my-yt-down/my-yt-down" ]; then
+    sudo chmod 755 /usr/lib/my-yt-down/my-yt-down
+fi
+
 cd /usr/lib/my-yt-down
-exec /usr/lib/my-yt-down/my-yt-down "$@"
+exec ./my-yt-down "$@"
 EOL
 
-# Garantir que o script de inicialização tenha as permissões corretas
 chmod 755 debian/usr/local/bin/my-yt-down
 
 # Criar arquivo .desktop
@@ -137,15 +149,33 @@ EOF
 # Criar script postinst
 cat > debian/DEBIAN/postinst << 'EOL'
 #!/bin/bash
+set -e
 
 # Criar diretório de downloads com permissões corretas
 mkdir -p /usr/lib/my-yt-down/downloads
-chmod 777 /usr/lib/my-yt-down/downloads
+chmod -R 777 /usr/lib/my-yt-down/downloads
 
-# Corrigir permissões dos executáveis
+# Corrigir permissões dos executáveis e diretórios
 chmod 755 /usr/lib/my-yt-down/my-yt-down
 chmod -R 755 /usr/lib/my-yt-down/_internal
 chmod 755 /usr/local/bin/my-yt-down
+
+# Garantir que os diretórios tenham as permissões corretas
+chmod 755 /usr/lib/my-yt-down
+chmod 755 /usr/local/bin
+
+# Corrigir propriedade dos arquivos
+chown -R root:root /usr/lib/my-yt-down
+chown root:root /usr/local/bin/my-yt-down
+
+# Tornar o diretório de downloads gravável por todos os usuários
+chmod 777 /usr/lib/my-yt-down/downloads
+chown -R root:users /usr/lib/my-yt-down/downloads
+
+# Atualizar cache de aplicativos
+if [ -x "$(command -v update-desktop-database)" ]; then
+    update-desktop-database
+fi
 
 exit 0
 EOL
