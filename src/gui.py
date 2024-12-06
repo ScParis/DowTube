@@ -384,9 +384,25 @@ class DownloaderGUI(ctk.CTk):
         
         # Update download directory
         self.download_dir = self.dir_entry.get().strip()
+        if not self.download_dir:
+            self.download_dir = "/usr/lib/my-yt-down/downloads"
+            self.dir_entry.delete(0, tk.END)
+            self.dir_entry.insert(0, self.download_dir)
+        
         if not os.path.exists(self.download_dir):
             try:
-                os.makedirs(self.download_dir)
+                os.makedirs(self.download_dir, mode=0o777, exist_ok=True)
+            except PermissionError:
+                fallback_dir = os.path.expanduser("~/Downloads/my-yt-down")
+                try:
+                    os.makedirs(fallback_dir, exist_ok=True)
+                    self.download_dir = fallback_dir
+                    self.dir_entry.delete(0, tk.END)
+                    self.dir_entry.insert(0, fallback_dir)
+                    self.status_label.configure(text=f"Using fallback directory: {fallback_dir}")
+                except Exception as e:
+                    self.status_label.configure(text=f"Error creating directory: {str(e)}")
+                    return
             except Exception as e:
                 self.status_label.configure(text=f"Error creating directory: {str(e)}")
                 return

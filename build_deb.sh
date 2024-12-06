@@ -112,14 +112,23 @@ Description: YouTube Video Downloader
  Supports video and audio downloads with various quality options.
 EOF
 
-# Criar arquivo postinst
-cat > debian/DEBIAN/postinst << 'EOF'
+# Criar script postinst
+cat > debian/DEBIAN/postinst << 'EOL'
 #!/bin/bash
-chmod +x /usr/local/bin/my-yt-down
-update-desktop-database
-EOF
 
-chmod +x debian/DEBIAN/postinst
+# Criar diretório de downloads com permissões corretas
+mkdir -p /usr/lib/my-yt-down/downloads
+chmod 777 /usr/lib/my-yt-down/downloads
+
+# Corrigir permissões dos executáveis
+chmod 755 /usr/lib/my-yt-down/my-yt-down
+chmod -R 755 /usr/lib/my-yt-down/_internal
+chmod 755 /usr/local/bin/my-yt-down
+
+exit 0
+EOL
+
+chmod 755 debian/DEBIAN/postinst
 
 # Criar arquivo postrm
 cat > debian/DEBIAN/postrm << 'EOF'
