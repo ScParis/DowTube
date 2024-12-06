@@ -15,6 +15,18 @@ apt-get update
 echo "Instalando Python 3.12 e dependências..."
 apt-get install -y python3.12 python3.12-dev python3.12-venv python3.12-distutils libpython3.12 libpython3.12-dev
 
+# Instalar dependências do Tkinter e outras bibliotecas necessárias
+echo "Instalando dependências do Tkinter e outras bibliotecas..."
+apt-get install -y \
+    python3.12-tk \
+    python3-tk \
+    tk-dev \
+    python3-pil \
+    python3-pil.imagetk \
+    python3-pip \
+    ffmpeg \
+    dpkg-dev
+
 # Verificar se Python 3.12 foi instalado corretamente
 if ! command -v python3.12 &> /dev/null; then
     echo "Erro: Falha ao instalar Python 3.12"
@@ -55,6 +67,8 @@ pyinstaller --onedir \
     --add-data "src:src" \
     --add-data "config.json:." \
     --hidden-import PIL \
+    --hidden-import PIL._tkinter_finder \
+    --hidden-import tkinter \
     --hidden-import customtkinter \
     --hidden-import tqdm \
     --hidden-import yt_dlp \
