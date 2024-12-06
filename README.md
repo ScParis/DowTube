@@ -93,7 +93,7 @@ brew install --cask tcl-tk
 1. Clone o repositório e construa o pacote:
 ```bash
 git clone https://github.com/seu-usuario/my-yt-down.git
-cd my-yt-down
+cd DownTube
 sudo ./build_deb.sh
 ```
 
