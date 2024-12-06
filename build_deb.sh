@@ -6,40 +6,28 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Adicionar repositório deadsnakes para Python 3.12
-echo "Adicionando repositório para Python 3.12..."
-add-apt-repository -y ppa:deadsnakes/ppa
+# Instalar dependências do sistema
+echo "Instalando dependências do sistema..."
 apt-get update
-
-# Instalar Python 3.12 e dependências
-echo "Instalando Python 3.12 e dependências..."
-apt-get install -y python3.12 python3.12-dev python3.12-venv python3.12-distutils libpython3.12 libpython3.12-dev
-
-# Instalar dependências do Tkinter e outras bibliotecas necessárias
-echo "Instalando dependências do Tkinter e outras bibliotecas..."
 apt-get install -y \
-    python3.12-tk \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-venv \
     python3-tk \
-    tk-dev \
     python3-pil \
     python3-pil.imagetk \
-    python3-pip \
+    tk-dev \
     ffmpeg \
     dpkg-dev
 
-# Verificar se Python 3.12 foi instalado corretamente
-if ! command -v python3.12 &> /dev/null; then
-    echo "Erro: Falha ao instalar Python 3.12"
-    exit 1
-fi
-
 # Verificar instalação do Tkinter
 echo "Verificando instalação do Tkinter..."
-python3.12 -c "import tkinter" || {
+python3 -c "import tkinter" || {
     echo "Erro: Tkinter não está instalado corretamente"
     echo "Tentando reinstalar..."
-    apt-get install --reinstall python3.12-tk
-    python3.12 -c "import tkinter" || {
+    apt-get install --reinstall python3-tk
+    python3 -c "import tkinter" || {
         echo "Erro: Falha ao instalar Tkinter"
         exit 1
     }
@@ -64,8 +52,8 @@ mkdir -p debian/usr/lib/my-yt-down
 mkdir -p debian/usr/share/applications
 mkdir -p debian/usr/share/icons/hicolor/256x256/apps
 
-# Criar ambiente virtual temporário com Python 3.12
-python3.12 -m venv build_venv
+# Criar ambiente virtual temporário
+python3 -m venv build_venv
 source build_venv/bin/activate
 
 # Atualizar pip e instalar dependências
@@ -74,8 +62,8 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 # Copiar biblioteca tkinter para o ambiente virtual
-cp -r /usr/lib/python3.12/tkinter build_venv/lib/python3.12/
-cp -r /usr/lib/python3.12/lib-dynload/_tkinter* build_venv/lib/python3.12/lib-dynload/ || true
+cp -r /usr/lib/python3*/tkinter build_venv/lib/python3*/ || true
+cp -r /usr/lib/python3*/lib-dynload/_tkinter* build_venv/lib/python3*/lib-dynload/ || true
 
 # Gerar executável com configurações específicas para Tkinter
 pyinstaller --onedir \
@@ -139,7 +127,7 @@ Version: 1.0.0
 Section: utils
 Priority: optional
 Architecture: amd64
-Depends: python3.12 (>= 3.12), python3.12-tk, python3-tk, tk-dev, python3-pil, python3-pil.imagetk, python3-pip, ffmpeg, libpython3.12
+Depends: python3 (>= 3.10), python3-tk, python3-pil, python3-pil.imagetk, python3-pip, ffmpeg
 Maintainer: Your Name <your.email@example.com>
 Description: YouTube Video Downloader
  A simple and efficient YouTube video downloader with GUI interface.
