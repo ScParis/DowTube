@@ -33,6 +33,18 @@ if ! command -v python3.12 &> /dev/null; then
     exit 1
 fi
 
+# Verificar instalação do Tkinter
+echo "Verificando instalação do Tkinter..."
+python3.12 -c "import tkinter" || {
+    echo "Erro: Tkinter não está instalado corretamente"
+    echo "Tentando reinstalar..."
+    apt-get install --reinstall python3.12-tk
+    python3.12 -c "import tkinter" || {
+        echo "Erro: Falha ao instalar Tkinter"
+        exit 1
+    }
+}
+
 # Verificar outras dependências necessárias
 DEPS=("python3-pip" "dpkg-dev" "ffmpeg")
 for dep in "${DEPS[@]}"; do
@@ -61,7 +73,11 @@ pip install --upgrade pip
 pip install -r requirements.txt
 pip install pyinstaller
 
-# Gerar executável
+# Copiar biblioteca tkinter para o ambiente virtual
+cp -r /usr/lib/python3.12/tkinter build_venv/lib/python3.12/
+cp -r /usr/lib/python3.12/lib-dynload/_tkinter* build_venv/lib/python3.12/lib-dynload/ || true
+
+# Gerar executável com configurações específicas para Tkinter
 pyinstaller --onedir \
     --name my-yt-down \
     --add-data "src:src" \
@@ -69,6 +85,9 @@ pyinstaller --onedir \
     --hidden-import PIL \
     --hidden-import PIL._tkinter_finder \
     --hidden-import tkinter \
+    --hidden-import tkinter.ttk \
+    --hidden-import tkinter.messagebox \
+    --hidden-import _tkinter \
     --hidden-import customtkinter \
     --hidden-import tqdm \
     --hidden-import yt_dlp \
@@ -77,6 +96,8 @@ pyinstaller --onedir \
     --hidden-import schedule \
     --hidden-import notify_py \
     --hidden-import psutil \
+    --collect-all tkinter \
+    --collect-all customtkinter \
     main.py
 
 # Copiar arquivos para a estrutura do pacote
@@ -118,12 +139,11 @@ Version: 1.0.0
 Section: utils
 Priority: optional
 Architecture: amd64
-Depends: python3.12 (>= 3.12), python3-tk, python3-pip, ffmpeg, libpython3.12, python3-pil
+Depends: python3.12 (>= 3.12), python3.12-tk, python3-tk, tk-dev, python3-pil, python3-pil.imagetk, python3-pip, ffmpeg, libpython3.12
 Maintainer: Your Name <your.email@example.com>
 Description: YouTube Video Downloader
- A simple and efficient YouTube video downloader
- with a graphical user interface.
- Supports video and audio downloads with various quality options.
+ A simple and efficient YouTube video downloader with GUI interface.
+ Supports various video and audio formats with customizable quality options.
 EOF
 
 # Criar script postinst
