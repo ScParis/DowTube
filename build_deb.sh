@@ -109,24 +109,43 @@ cat > debian/usr/local/bin/my-yt-down << 'EOL'
 #!/bin/bash
 set -e
 
+# Diretório base da aplicação
+APP_DIR="/usr/lib/my-yt-down"
+VENV_DIR="$APP_DIR/venv"
+
+# Criar ambiente virtual se não existir
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Criando ambiente virtual..."
+    python3 -m venv "$VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+    pip install --upgrade pip
+    pip install -r "$APP_DIR/requirements.txt"
+    deactivate
+else
+    # Verificar se as dependências estão instaladas no venv
+    source "$VENV_DIR/bin/activate"
+    if ! pip list | grep -q "yt-dlp"; then
+        echo "Instalando dependências no ambiente virtual..."
+        pip install --upgrade pip
+        pip install -r "$APP_DIR/requirements.txt"
+    fi
+    deactivate
+fi
+
 # Verificar se o diretório de downloads existe e tem permissões corretas
-if [ ! -d "/usr/lib/my-yt-down/downloads" ]; then
-    sudo mkdir -p /usr/lib/my-yt-down/downloads
-    sudo chmod 777 /usr/lib/my-yt-down/downloads
+if [ ! -d "$APP_DIR/downloads" ]; then
+    sudo mkdir -p "$APP_DIR/downloads"
+    sudo chmod 777 "$APP_DIR/downloads"
 fi
 
 # Verificar permissões do executável
-if [ ! -x "/usr/lib/my-yt-down/my-yt-down" ]; then
-    sudo chmod 755 /usr/lib/my-yt-down/my-yt-down
+if [ ! -x "$APP_DIR/my-yt-down" ]; then
+    sudo chmod 755 "$APP_DIR/my-yt-down"
 fi
 
-# Verificar se as dependências Python estão instaladas
-if ! pip3 list | grep -q "yt-dlp"; then
-    echo "Instalando dependências Python necessárias..."
-    pip3 install -r /usr/lib/my-yt-down/requirements.txt
-fi
-
-cd /usr/lib/my-yt-down
+# Ativar o ambiente virtual e executar o programa
+cd "$APP_DIR"
+source "$VENV_DIR/bin/activate"
 exec ./my-yt-down "$@"
 EOL
 
@@ -152,7 +171,7 @@ Version: 1.0.0
 Section: utils
 Priority: optional
 Architecture: amd64
-Depends: python3 (>= 3.10), python3-tk, python3-pil, python3-pil.imagetk, python3-pip, ffmpeg
+Depends: python3 (>= 3.10), python3-tk, python3-pil, python3-pil.imagetk, python3-pip, python3-venv, ffmpeg
 Maintainer: Your Name <your.email@example.com>
 Description: YouTube Video Downloader
  A simple and efficient YouTube video downloader with GUI interface.
@@ -164,32 +183,38 @@ cat > debian/DEBIAN/postinst << 'EOL'
 #!/bin/bash
 set -e
 
+APP_DIR="/usr/lib/my-yt-down"
+VENV_DIR="$APP_DIR/venv"
+
 # Criar diretório de downloads com permissões corretas
-mkdir -p /usr/lib/my-yt-down/downloads
-chmod -R 777 /usr/lib/my-yt-down/downloads
+mkdir -p "$APP_DIR/downloads"
+chmod -R 777 "$APP_DIR/downloads"
 
-# Copiar requirements.txt para o diretório de instalação
-cp requirements.txt /usr/lib/my-yt-down/
-
-# Instalar dependências Python globalmente
-pip3 install -r /usr/lib/my-yt-down/requirements.txt
+# Criar e configurar ambiente virtual
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+pip install --upgrade pip
+pip install -r "$APP_DIR/requirements.txt"
+deactivate
 
 # Corrigir permissões dos executáveis e diretórios
-chmod 755 /usr/lib/my-yt-down/my-yt-down
-chmod -R 755 /usr/lib/my-yt-down/_internal
+chmod 755 "$APP_DIR/my-yt-down"
+chmod -R 755 "$APP_DIR/_internal"
+chmod -R 755 "$VENV_DIR"
 chmod 755 /usr/local/bin/my-yt-down
 
 # Garantir que os diretórios tenham as permissões corretas
-chmod 755 /usr/lib/my-yt-down
+chmod 755 "$APP_DIR"
 chmod 755 /usr/local/bin
 
 # Corrigir propriedade dos arquivos
-chown -R root:root /usr/lib/my-yt-down
+chown -R root:root "$APP_DIR"
+chown -R root:root "$VENV_DIR"
 chown root:root /usr/local/bin/my-yt-down
 
 # Tornar o diretório de downloads gravável por todos os usuários
-chmod 777 /usr/lib/my-yt-down/downloads
-chown -R root:users /usr/lib/my-yt-down/downloads
+chmod 777 "$APP_DIR/downloads"
+chown -R root:users "$APP_DIR/downloads"
 
 # Atualizar cache de aplicativos
 if [ -x "$(command -v update-desktop-database)" ]; then
