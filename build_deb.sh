@@ -33,15 +33,6 @@ python3 -c "import tkinter" || {
     }
 }
 
-# Verificar outras dependências necessárias
-DEPS=("python3-pip" "dpkg-dev" "ffmpeg")
-for dep in "${DEPS[@]}"; do
-    if ! dpkg -l | grep -q "^ii  $dep "; then
-        echo "Instalando $dep..."
-        apt-get install -y "$dep"
-    fi
-done
-
 # Limpar diretórios anteriores
 rm -rf build/ dist/ debian/
 
@@ -52,20 +43,33 @@ mkdir -p debian/usr/lib/my-yt-down
 mkdir -p debian/usr/share/applications
 mkdir -p debian/usr/share/icons/hicolor/256x256/apps
 
-# Criar ambiente virtual temporário
+# Criar e ativar ambiente virtual temporário
+echo "Criando ambiente virtual..."
 python3 -m venv build_venv
 source build_venv/bin/activate
 
-# Atualizar pip e instalar dependências
+# Instalar dependências no ambiente virtual
+echo "Instalando dependências Python..."
 pip install --upgrade pip
+pip install wheel setuptools
 pip install -r requirements.txt
 pip install pyinstaller
 
-# Copiar biblioteca tkinter para o ambiente virtual
-cp -r /usr/lib/python3*/tkinter build_venv/lib/python3*/ || true
-cp -r /usr/lib/python3*/lib-dynload/_tkinter* build_venv/lib/python3*/lib-dynload/ || true
+# Verificar se todas as dependências foram instaladas
+echo "Verificando dependências instaladas..."
+python3 -c "
+import pkg_resources
+import sys
+required = [l.strip().split('>=')[0] for l in open('requirements.txt')]
+installed = [pkg.key for pkg in pkg_resources.working_set]
+missing = [pkg for pkg in required if pkg.lower() not in [p.lower() for p in installed]]
+if missing:
+    print('Erro: Dependências faltando:', missing)
+    sys.exit(1)
+"
 
 # Gerar executável com configurações específicas para Tkinter
+echo "Gerando executável..."
 pyinstaller --onedir \
     --name my-yt-down \
     --add-data "src:src" \
@@ -88,7 +92,10 @@ pyinstaller --onedir \
     --collect-all customtkinter \
     main.py
 
-# Copiar arquivos para a estrutura do pacote
+# Desativar ambiente virtual
+deactivate
+
+# Copiar arquivos para a estrutura debian
 cp -r dist/my-yt-down/* debian/usr/lib/my-yt-down/
 cp src/assets/icon.png debian/usr/share/icons/hicolor/256x256/apps/my-yt-down.png
 
@@ -111,6 +118,12 @@ fi
 # Verificar permissões do executável
 if [ ! -x "/usr/lib/my-yt-down/my-yt-down" ]; then
     sudo chmod 755 /usr/lib/my-yt-down/my-yt-down
+fi
+
+# Verificar se as dependências Python estão instaladas
+if ! pip3 list | grep -q "yt-dlp"; then
+    echo "Instalando dependências Python necessárias..."
+    pip3 install -r /usr/lib/my-yt-down/requirements.txt
 fi
 
 cd /usr/lib/my-yt-down
@@ -155,6 +168,12 @@ set -e
 mkdir -p /usr/lib/my-yt-down/downloads
 chmod -R 777 /usr/lib/my-yt-down/downloads
 
+# Copiar requirements.txt para o diretório de instalação
+cp requirements.txt /usr/lib/my-yt-down/
+
+# Instalar dependências Python globalmente
+pip3 install -r /usr/lib/my-yt-down/requirements.txt
+
 # Corrigir permissões dos executáveis e diretórios
 chmod 755 /usr/lib/my-yt-down/my-yt-down
 chmod -R 755 /usr/lib/my-yt-down/_internal
@@ -182,21 +201,8 @@ EOL
 
 chmod 755 debian/DEBIAN/postinst
 
-# Criar arquivo postrm
-cat > debian/DEBIAN/postrm << 'EOF'
-#!/bin/bash
-update-desktop-database
-EOF
-
-chmod +x debian/DEBIAN/postrm
+# Copiar requirements.txt para o pacote
+cp requirements.txt debian/usr/lib/my-yt-down/
 
 # Criar pacote
 dpkg-deb --build debian my-yt-down.deb
-
-# Limpar ambiente virtual temporário
-deactivate
-rm -rf build_venv
-
-echo "Pacote .deb criado com sucesso!"
-echo "Para instalar, use: sudo dpkg -i my-yt-down.deb"
-echo "Se houver dependências faltando: sudo apt-get install -f"
