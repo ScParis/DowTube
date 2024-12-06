@@ -1,55 +1,62 @@
+"""File and directory utilities."""
 import os
-import platform
+import logging
 import subprocess
 from pathlib import Path
+from datetime import datetime
+from typing import Optional
 
-def get_logs_dir():
-    """Retorna o diretório de logs."""
-    return Path.home() / '.my-yt-down' / 'logs'
+def open_logs_directory() -> bool:
+    """Open the logs directory in the system's file explorer."""
+    try:
+        logs_dir = os.path.expanduser("~/.my-yt-down/logs")
+        if os.path.exists(logs_dir):
+            subprocess.run(['xdg-open', logs_dir])
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Failed to open logs directory: {e}")
+        return False
 
-def open_logs_directory():
-    """
-    Abre o diretório de logs no explorador de arquivos padrão do sistema.
-    Cria o diretório se não existir.
+def read_logs(max_lines: Optional[int] = None) -> str:
+    """Read the contents of the log files.
+    
+    Args:
+        max_lines: Maximum number of lines to read (from newest). If None, read all lines.
     
     Returns:
-        bool: True se abriu com sucesso, False caso contrário
+        str: The contents of the log files.
     """
-    logs_dir = get_logs_dir()
-    
-    # Criar diretório se não existir
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    
     try:
-        # Detectar sistema operacional
-        system = platform.system().lower()
+        logs_dir = os.path.expanduser("~/.my-yt-down/logs")
+        if not os.path.exists(logs_dir):
+            return "No logs found."
+            
+        # Get list of log files sorted by modification time (newest first)
+        log_files = sorted(
+            Path(logs_dir).glob("*.log"),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
         
-        if system == 'darwin':  # macOS
-            subprocess.run(['open', str(logs_dir)])
-        elif system == 'linux':
-            # Tentar diferentes comandos comuns em ordem
-            commands = [
-                ['xdg-open', str(logs_dir)],  # Padrão Linux
-                ['gnome-open', str(logs_dir)],  # GNOME
-                ['kde-open', str(logs_dir)],   # KDE
-                ['exo-open', str(logs_dir)],   # XFCE
-                ['pcmanfm', str(logs_dir)]     # LXDE/LXQt
-            ]
+        if not log_files:
+            return "No logs found."
             
-            for cmd in commands:
-                try:
-                    subprocess.run(cmd)
-                    return True
-                except FileNotFoundError:
-                    continue
-                    
-            # Se nenhum comando funcionou, tentar o último recurso
-            os.system(f'x-terminal-emulator -e "cd {str(logs_dir)} && ls -la"')
-        else:
-            raise OSError(f"Sistema operacional não suportado: {system}")
+        # Read the contents of all log files
+        all_logs = []
+        for log_file in log_files:
+            with open(log_file, 'r') as f:
+                logs = f.readlines()
+                if max_lines:
+                    logs = logs[-max_lines:]
+                all_logs.extend(logs)
+        
+        # If max_lines specified, only return the last max_lines
+        if max_lines:
+            all_logs = all_logs[-max_lines:]
             
-        return True
+        return "".join(all_logs)
         
     except Exception as e:
-        print(f"Erro ao abrir diretório de logs: {e}")
-        return False
+        logging.error(f"Failed to read logs: {e}")
+        return f"Error reading logs: {e}"

@@ -1,519 +1,566 @@
+"""YouTube Downloader GUI application."""
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import filedialog, messagebox
 import customtkinter as ctk
-from PIL import Image, ImageTk
-import threading
-import time
-from datetime import datetime
-from pathlib import Path
-from typing import Optional, Dict, Any
-import subprocess
-import sys
+from typing import Optional, Dict
 import logging
-import json
-import platform
-from utils.file_opener import open_logs_directory, get_logs_dir
+from datetime import datetime
 
-from downloader import MediaDownloader, DownloadError
-from config import (
-    FORMATS, DOWNLOADS_DIR, AUDIO_QUALITIES,
-    VIDEO_QUALITIES, MAX_CONCURRENT_DOWNLOADS, BASE_DIR
+from src.core.downloader import MediaDownloader, DownloadOptions, DownloadError
+from src.config.settings import (
+    DOWNLOADS_DIR,
+    VIDEO_FORMATS,
+    AUDIO_FORMATS,
+    VIDEO_QUALITIES,
+    AUDIO_QUALITIES,
+    ERROR_MESSAGES,
+    PADDING,
+    LOGS_DIR
 )
+from src.utils.utils import read_logs
+
+class SlidingPanel(ctk.CTkFrame):
+    """A sliding panel that can be shown/hidden."""
+    
+    def __init__(self, master, width=300, **kwargs):
+        """Initialize the sliding panel.
+        
+        Args:
+            master: Parent widget
+            width: Panel width in pixels
+            **kwargs: Additional arguments passed to CTkFrame
+        """
+        super().__init__(master, width=width, height=master.winfo_height(), **kwargs)
+        
+        self.width = width
+        self.shown = False
+        
+        # Configure initial position (hidden)
+        self.place(relx=1.0, rely=0, relheight=1)
+        
+    def toggle(self):
+        """Toggle panel visibility."""
+        if self.shown:
+            self.hide()
+        else:
+            self.show()
+            
+    def show(self):
+        """Show the panel."""
+        self.place(relx=1.0 - (self.width / self.master.winfo_width()), rely=0)
+        self.shown = True
+        
+    def hide(self):
+        """Hide the panel."""
+        self.place(relx=1.0, rely=0)
+        self.shown = False
 
 class DownloaderGUI(ctk.CTk):
-    """YouTube Downloader GUI application.
-    
-    A modern, user-friendly interface for downloading YouTube videos and audio
-    with support for multiple formats and quality options.
-    
-    Features:
-        - Video downloads (MP4, WebM, MKV)
-        - Audio downloads (MP3, AAC, Opus)
-        - Multiple quality options
-        - Custom save location
-        - Download progress tracking
-        - Error handling
-    """
+    """Main GUI window for YouTube Downloader application."""
     
     def __init__(self):
-        """Initialize the GUI application."""
         super().__init__()
+        self._setup_logging()
+        self._initialize_gui()
+        self._create_menu()
+        self._create_main_layout()
         
-        # Basic setup
+        self.downloader = MediaDownloader()
+        self.active_downloads: Dict[str, Dict] = {}
+        self.progress_bar = ctk.CTkProgressBar(master=self, width=300)
+        self.progress_bar.pack(pady=10)
+
+    def _setup_logging(self) -> None:
+        """Configure logging for the application."""
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+
+    def _initialize_gui(self) -> None:
+        """Initialize GUI settings and window properties."""
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
         self.title("YouTube Downloader")
-        self.geometry("800x600")
-        self.minsize(700, 800)
+        self.geometry("1200x800")
+        self.minsize(1000, 600)
         
-        # Initialize
-        self.config = self.load_config()
-        self.download_dir = self.config.get('download_dir', DOWNLOADS_DIR)
-        self.downloader = MediaDownloader(download_dir=self.download_dir)
-        self.active_downloads = {}
+        self._configure_colors()
         
-        # Create menu
-        self.create_menu()
+    def _configure_colors(self) -> None:
+        """Configure custom colors for the GUI."""
+        self.colors = {
+            'bg': '#1c1c1c',
+            'button': '#2962ff',
+            'button_hover': '#1e88e5',
+            'text': '#ffffff',
+            'entry_bg': '#2d2d2d',
+            'frame_bg': '#242424',
+            'success': '#4caf50',
+            'error': '#f44336'
+        }
         
-        # Setup interface
-        self.create_widgets()
-    
-    def create_menu(self):
-        """Cria a barra de menu."""
-        # Frame para o menu
-        menu_frame = ctk.CTkFrame(self)
+        self.configure(fg_color=self.colors['bg'])
+
+    def _create_menu(self) -> None:
+        """Create menu bar with help and logs buttons."""
+        menu_frame = ctk.CTkFrame(
+            self,
+            fg_color=self.colors['bg']
+        )
         menu_frame.pack(fill="x", padx=5, pady=5)
         
-        # Botão de Ajuda
+        # Help button
         help_button = ctk.CTkButton(
             menu_frame,
             text="?",
             width=30,
-            command=self.show_help
+            command=self._show_help,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover']
         )
         help_button.pack(side="right", padx=5)
         
-        # Botão de Logs
-        logs_button = ctk.CTkButton(
+        # Logs button
+        self.logs_button = ctk.CTkButton(
             menu_frame,
             text="📋 Logs",
             width=80,
-            command=self.open_logs
+            command=self._toggle_logs_panel,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover']
         )
-        logs_button.pack(side="right", padx=5)
-    
-    def open_logs(self):
-        """Abre o diretório de logs."""
-        if not open_logs_directory():
-            # Se falhar ao abrir, mostrar mensagem de erro
-            self.show_error("Não foi possível abrir o diretório de logs.\nVerifique o console para mais detalhes.")
-    
-    def show_help(self):
-        """Mostra a janela de ajuda."""
-        help_window = ctk.CTkToplevel(self)
-        help_window.title("Ajuda")
-        help_window.geometry("600x400")
+        self.logs_button.pack(side="right", padx=5)
+
+    def _create_main_layout(self) -> None:
+        """Create main two-column layout."""
+        # Main container
+        main_container = ctk.CTkFrame(
+            self,
+            fg_color=self.colors['bg']
+        )
+        main_container.pack(fill="both", expand=True, padx=PADDING['large'], 
+                          pady=PADDING['large'])
         
-        # Texto de ajuda
-        help_text = ctk.CTkTextbox(help_window)
+        # Configure grid
+        main_container.grid_columnconfigure(0, weight=3)  # Left column
+        main_container.grid_columnconfigure(1, weight=2)  # Right column
+        main_container.grid_rowconfigure(0, weight=1)
+        
+        # Create columns
+        self._create_left_column(main_container)
+        self._create_right_column(main_container)
+        
+        # Create sliding logs panel
+        self._create_logs_panel()
+        
+        # Cancel button
+        self.cancel_button = ctk.CTkButton(
+            master=self,
+            text="Cancelar Download",
+            command=self.cancel_download,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover']
+        )
+        self.cancel_button.pack(pady=10)
+        
+        # Clear log button
+        self.clear_log_button = ctk.CTkButton(
+            master=self,
+            text="Limpar Log",
+            command=self.clear_log,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover']
+        )
+        self.clear_log_button.pack(pady=10)
+        
+        # Open logs folder button
+        self.open_logs_button = ctk.CTkButton(
+            master=self,
+            text="Abrir Pasta de Logs",
+            command=self.open_logs_folder,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover']
+        )
+        self.open_logs_button.pack(pady=10)
+
+    def _create_left_column(self, parent) -> None:
+        """Create left column with input controls."""
+        left_frame = ctk.CTkFrame(
+            parent,
+            fg_color=self.colors['frame_bg']
+        )
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, PADDING['medium']))
+        
+        # Title
+        title = ctk.CTkLabel(
+            left_frame,
+            text="YouTube Downloader",
+            font=("Roboto", 28, "bold"),
+            text_color=self.colors['text']
+        )
+        title.pack(pady=(PADDING['large'], PADDING['large']))
+        
+        # URL Input
+        url_label = ctk.CTkLabel(
+            left_frame,
+            text="Video URL:",
+            font=("Roboto", 14, "bold"),
+            text_color=self.colors['text']
+        )
+        url_label.pack(anchor="w", padx=PADDING['medium'])
+        
+        self.url_entry = ctk.CTkEntry(
+            left_frame,
+            height=40,
+            placeholder_text="Paste YouTube URL here...",
+            fg_color=self.colors['entry_bg'],
+            text_color=self.colors['text'],
+            placeholder_text_color='gray'
+        )
+        self.url_entry.pack(fill="x", padx=PADDING['medium'], 
+                          pady=(PADDING['small'], PADDING['medium']))
+        
+        # Media Type Selection
+        type_frame = ctk.CTkFrame(
+            left_frame,
+            fg_color="transparent"
+        )
+        type_frame.pack(fill="x", pady=PADDING['medium'])
+        
+        type_label = ctk.CTkLabel(
+            type_frame,
+            text="Type:",
+            font=("Roboto", 14, "bold"),
+            text_color=self.colors['text']
+        )
+        type_label.pack(side="left", padx=PADDING['medium'])
+        
+        self.type_var = tk.StringVar(value="video")
+        
+        video_rb = ctk.CTkRadioButton(
+            type_frame,
+            text="Video",
+            variable=self.type_var,
+            value="video",
+            command=self._update_format_options,
+            fg_color=self.colors['button'],
+            text_color=self.colors['text']
+        )
+        video_rb.pack(side="left", padx=PADDING['medium'])
+        
+        audio_rb = ctk.CTkRadioButton(
+            type_frame,
+            text="Audio",
+            variable=self.type_var,
+            value="audio",
+            command=self._update_format_options,
+            fg_color=self.colors['button'],
+            text_color=self.colors['text']
+        )
+        audio_rb.pack(side="left", padx=PADDING['medium'])
+        
+        # Format Selection
+        format_label = ctk.CTkLabel(
+            left_frame,
+            text="Format:",
+            font=("Roboto", 14, "bold"),
+            text_color=self.colors['text']
+        )
+        format_label.pack(anchor="w", padx=PADDING['medium'], 
+                         pady=(PADDING['medium'], 0))
+        
+        self.format_var = tk.StringVar(value="MP4")
+        self.format_menu = ctk.CTkOptionMenu(
+            left_frame,
+            values=list(VIDEO_FORMATS.keys()),
+            variable=self.format_var,
+            fg_color=self.colors['button'],
+            button_color=self.colors['button'],
+            button_hover_color=self.colors['button_hover'],
+            dropdown_fg_color=self.colors['frame_bg'],
+            dropdown_hover_color=self.colors['button_hover']
+        )
+        self.format_menu.pack(fill="x", padx=PADDING['medium'], 
+                            pady=(PADDING['small'], PADDING['medium']))
+        
+        # Quality Selection
+        quality_label = ctk.CTkLabel(
+            left_frame,
+            text="Quality:",
+            font=("Roboto", 14, "bold"),
+            text_color=self.colors['text']
+        )
+        quality_label.pack(anchor="w", padx=PADDING['medium'])
+        
+        self.quality_var = tk.StringVar(value=VIDEO_QUALITIES[2])
+        self.quality_menu = ctk.CTkOptionMenu(
+            left_frame,
+            values=VIDEO_QUALITIES,
+            variable=self.quality_var,
+            fg_color=self.colors['button'],
+            button_color=self.colors['button'],
+            button_hover_color=self.colors['button_hover'],
+            dropdown_fg_color=self.colors['frame_bg'],
+            dropdown_hover_color=self.colors['button_hover']
+        )
+        self.quality_menu.pack(fill="x", padx=PADDING['medium'], 
+                             pady=(PADDING['small'], PADDING['medium']))
+        
+        # Directory Selection
+        dir_button = ctk.CTkButton(
+            left_frame,
+            text="Change Download Directory",
+            command=self._select_directory,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover'],
+            height=40
+        )
+        dir_button.pack(fill="x", padx=PADDING['medium'], 
+                       pady=PADDING['medium'])
+        
+        # Download Button
+        self.download_button = ctk.CTkButton(
+            left_frame,
+            text="Download",
+            command=self._start_download,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover'],
+            height=50,
+            font=("Roboto", 16, "bold")
+        )
+        self.download_button.pack(fill="x", padx=PADDING['medium'], 
+                                pady=PADDING['medium'])
+
+    def _create_right_column(self, parent) -> None:
+        """Create right column with status and progress."""
+        right_frame = ctk.CTkFrame(
+            parent,
+            fg_color=self.colors['frame_bg']
+        )
+        right_frame.grid(row=0, column=1, sticky="nsew")
+        
+        # Status Header
+        status_header = ctk.CTkLabel(
+            right_frame,
+            text="Download Status",
+            font=("Roboto", 20, "bold"),
+            text_color=self.colors['text']
+        )
+        status_header.pack(pady=PADDING['medium'])
+        
+        # Status Display
+        self.status_text = ctk.CTkTextbox(
+            right_frame,
+            fg_color=self.colors['entry_bg'],
+            text_color=self.colors['text']
+        )
+        self.status_text.pack(fill="both", expand=True, padx=PADDING['medium'], 
+                            pady=PADDING['medium'])
+        self.status_text.configure(state="disabled")
+
+    def _create_logs_panel(self) -> None:
+        """Create the sliding logs panel."""
+        self.logs_panel = SlidingPanel(
+            master=self,
+            width=400,
+            fg_color=("gray85", "gray20")
+        )
+        
+        # Logs text area
+        self.logs_text = ctk.CTkTextbox(
+            master=self.logs_panel,
+            wrap="word",
+            font=("Courier", 12)
+        )
+        self.logs_text.pack(expand=True, fill="both", padx=10, pady=10)
+        
+        # Update logs initially
+        self._update_logs()
+        
+        # Schedule periodic log updates
+        self.after(5000, self._update_logs)
+
+    def _toggle_logs_panel(self) -> None:
+        """Toggle the logs panel visibility."""
+        self.logs_panel.toggle()
+        if self.logs_panel.shown:
+            self._refresh_logs()
+
+    def _refresh_logs(self) -> None:
+        """Refresh the logs display."""
+        logs_content = read_logs()
+        self.logs_text.configure(state="normal")
+        self.logs_text.delete("1.0", "end")
+        self.logs_text.insert("1.0", logs_content)
+        self.logs_text.configure(state="disabled")
+        self.logs_text.see("end")
+
+    def _update_format_options(self, *args) -> None:
+        """Update format options based on selected media type."""
+        media_type = self.type_var.get()
+        
+        if media_type == "video":
+            self.format_menu.configure(values=list(VIDEO_FORMATS.keys()))
+            self.format_var.set("MP4")
+            self.quality_menu.configure(values=VIDEO_QUALITIES)
+            self.quality_var.set(VIDEO_QUALITIES[2])
+        else:
+            self.format_menu.configure(values=list(AUDIO_FORMATS.keys()))
+            self.format_var.set("MP3")
+            self.quality_menu.configure(values=AUDIO_QUALITIES)
+            self.quality_var.set(AUDIO_QUALITIES[0])
+
+    def _show_help(self) -> None:
+        """Show help window with usage instructions."""
+        help_window = ctk.CTkToplevel(self)
+        help_window.title("Help")
+        help_window.geometry("600x400")
+        help_window.configure(fg_color=self.colors['bg'])
+        
+        help_text = ctk.CTkTextbox(
+            help_window,
+            fg_color=self.colors['frame_bg'],
+            text_color=self.colors['text']
+        )
         help_text.pack(fill="both", expand=True, padx=10, pady=10)
         
         help_content = """
-        YouTube Downloader - Ajuda
+        YouTube Downloader - Help Guide
         
-        1. Como usar:
-           - Cole a URL do vídeo do YouTube
-           - Escolha o formato desejado
-           - Selecione a qualidade
-           - Clique em Download
+        1. How to Use:
+           - Paste the YouTube video URL
+           - Choose media type (Video or Audio)
+           - Select desired format
+           - Select quality
+           - Click Download
         
-        2. Formatos suportados:
-           - Vídeo: MP4, WebM, MKV
-           - Áudio: MP3, AAC, Opus
+        2. Supported Formats:
+           - Video: MP4, WebM, MKV
+           - Audio: MP3, AAC, Opus
         
-        3. Logs de erro:
-           - Clique no botão "📋 Logs" para acessar os logs
-           - Os logs são salvos em ~/.my-yt-down/logs/
-           - Cada arquivo de log é nomeado com a data
+        3. Error Logs:
+           - Click the "📋 Logs" button to view logs
+           - Each log entry includes timestamp
+           - Click refresh to update logs
         
-        4. Em caso de problemas:
-           - Verifique os logs de erro
-           - Certifique-se de ter uma conexão estável
-           - Verifique se o vídeo está disponível
-           - Verifique as permissões de escrita
+        4. Troubleshooting:
+           - Check error logs
+           - Ensure stable internet connection
+           - Verify video availability
+           - Check write permissions
         """
         
         help_text.insert("1.0", help_content)
         help_text.configure(state="disabled")
-    
-    def show_error(self, message):
-        """Mostra uma mensagem de erro."""
-        error_window = ctk.CTkToplevel(self)
-        error_window.title("Erro")
-        error_window.geometry("400x200")
-        
-        # Mensagem de erro
-        error_label = ctk.CTkLabel(
-            error_window,
-            text=message,
-            wraplength=350
+
+    def _select_directory(self) -> None:
+        """Open directory selection dialog."""
+        dir_path = filedialog.askdirectory(
+            initialdir=DOWNLOADS_DIR,
+            title="Select Download Directory"
         )
-        error_label.pack(expand=True, padx=20, pady=20)
-        
-        # Botão de fechar
-        close_button = ctk.CTkButton(
-            error_window,
-            text="Fechar",
-            command=error_window.destroy
-        )
-        close_button.pack(pady=10)
-    
-    def create_widgets(self):
-        """Create and arrange all GUI elements.
-        
-        Creates a clean, organized interface with:
-        - URL input field
-        - Download directory selection
-        - Format and quality options
-        - Download button
-        - Downloads list
-        - Status display
-        """
-        # Main container
-        main_frame = ctk.CTkFrame(self)
-        main_frame.pack(fill="both", expand=True, padx=25, pady=25)
-        
-        # Title
-        title_label = ctk.CTkLabel(
-            main_frame,
-            text="YouTube Downloader",
-            font=("Roboto", 24, "bold")
-        )
-        title_label.pack(pady=(0, 20))
-        
-        # Content frame with consistent padding
-        content_frame = ctk.CTkFrame(main_frame)
-        content_frame.pack(fill="both", expand=True, padx=20, pady=0)
-        
-        # 1. URL Input Section
-        url_label = ctk.CTkLabel(
-            content_frame,
-            text="Video URL:",
-            font=("Roboto", 14, "bold"),
-            anchor="w"
-        )
-        url_label.pack(fill="x", pady=(0, 5))
-        
-        self.url_entry = ctk.CTkEntry(
-            content_frame,
-            height=40,
-            placeholder_text="Paste YouTube URL here..."
-        )
-        self.url_entry.pack(fill="x", pady=(0, 20))
-        
-        # 2. Download Directory Section
-        dir_label = ctk.CTkLabel(
-            content_frame,
-            text="Save Location:",
-            font=("Roboto", 14, "bold"),
-            anchor="w"
-        )
-        dir_label.pack(fill="x", pady=(0, 5))
-        
-        dir_frame = ctk.CTkFrame(content_frame)
-        dir_frame.pack(fill="x", pady=(0, 20))
-        
-        self.dir_entry = ctk.CTkEntry(dir_frame)
-        self.dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.dir_entry.insert(0, self.download_dir)
-        
-        browse_btn = ctk.CTkButton(
-            dir_frame,
-            text="Browse",
-            width=100,
-            command=self.browse_directory
-        )
-        browse_btn.pack(side="right")
-        
-        # 3. Format Options Section
-        format_label = ctk.CTkLabel(
-            content_frame,
-            text="Download Options:",
-            font=("Roboto", 14, "bold"),
-            anchor="w"
-        )
-        format_label.pack(fill="x", pady=(0, 10))
-        
-        # Format selection frame
-        format_frame = ctk.CTkFrame(content_frame)
-        format_frame.pack(fill="x", pady=(0, 20))
-        
-        # Media Type Selection
-        type_label = ctk.CTkLabel(
-            format_frame,
-            text="Type:",
-            font=("Roboto", 13),
-            width=80
-        )
-        type_label.pack(side="left", padx=10)
-        
-        self.format_type_var = tk.StringVar(value="video")
-        self.format_type_var.trace('w', self.update_format_options)
-        
-        video_rb = ctk.CTkRadioButton(
-            format_frame,
-            text="Video",
-            variable=self.format_type_var,
-            value="video"
-        )
-        video_rb.pack(side="left", padx=10)
-        
-        audio_rb = ctk.CTkRadioButton(
-            format_frame,
-            text="Audio",
-            variable=self.format_type_var,
-            value="audio"
-        )
-        audio_rb.pack(side="left", padx=10)
-        
-        # Format Options Frame
-        self.format_options_frame = ctk.CTkFrame(content_frame)
-        self.format_options_frame.pack(fill="x", pady=(0, 20))
-        
-        # Format Combobox
-        format_box_label = ctk.CTkLabel(
-            self.format_options_frame,
-            text="Format:",
-            font=("Roboto", 13),
-            width=80
-        )
-        format_box_label.pack(side="left", padx=10)
-        
-        self.format_var = tk.StringVar()
-        self.format_combo = ctk.CTkComboBox(
-            self.format_options_frame,
-            width=200,
-            variable=self.format_var
-        )
-        self.format_combo.pack(side="left", padx=10)
-        
-        # Quality Label
-        quality_label = ctk.CTkLabel(
-            self.format_options_frame,
-            text="Quality:",
-            font=("Roboto", 13),
-            width=80
-        )
-        quality_label.pack(side="left", padx=10)
-        
-        # Quality Combobox
-        self.quality_var = tk.StringVar()
-        self.quality_combo = ctk.CTkComboBox(
-            self.format_options_frame,
-            width=120,
-            values=["High", "Medium", "Low"],
-            variable=self.quality_var
-        )
-        self.quality_combo.pack(side="left", padx=10)
-        self.quality_combo.set("High")
-        
-        # Initialize format options
-        self.update_format_options()
-        
-        # 4. Download Button
-        self.download_btn = ctk.CTkButton(
-            content_frame,
-            text="Download",
-            command=self.start_download,
-            height=45,
-            font=("Roboto", 14, "bold"),
-            fg_color="#00a884",
-            hover_color="#008f6c"
-        )
-        self.download_btn.pack(fill="x", pady=(0, 20))
-        
-        # 5. Downloads List
-        list_label = ctk.CTkLabel(
-            content_frame,
-            text="Downloads:",
-            font=("Roboto", 14, "bold"),
-            anchor="w"
-        )
-        list_label.pack(fill="x", pady=(0, 5))
-        
-        self.downloads_list = ctk.CTkScrollableFrame(
-            content_frame,
-            height=200
-        )
-        self.downloads_list.pack(fill="both", expand=True)
-        
-        # 6. Status
-        self.status_label = ctk.CTkLabel(
-            content_frame,
-            text="Ready",
-            font=("Roboto", 12)
-        )
-        self.status_label.pack(pady=(10, 0))
-    
-    def update_format_options(self, *args):
-        """Update format options based on selected media type.
-        
-        Updates the format dropdown menu with appropriate options when
-        the user switches between video and audio.
-        
-        Args:
-            *args: Variable arguments (unused, required for tkinter trace)
-        """
-        format_type = self.format_type_var.get()
-        
-        if format_type == "video":
-            formats = ["MP4", "WebM", "MKV"]
-        else:
-            formats = ["MP3", "AAC", "Opus"]
-        
-        self.format_combo.configure(values=formats)
-        self.format_combo.set(formats[0])
-    
-    def get_format_name(self):
-        """Generate format name for the downloader.
-        
-        Combines the selected format and quality into a format name
-        that matches the downloader's format definitions.
-        
-        Returns:
-            str: Format name (e.g., 'mp4_high', 'mp3_medium')
-        """
-        format_type = self.format_type_var.get()
-        format_value = self.format_combo.get().lower()
-        quality = self.quality_var.get().lower()
-        
-        return f"{format_value}_{quality}"
-    
-    def start_download(self):
-        """Start the download process.
-        
-        Validates input, prepares download parameters, and starts
-        the download in a background thread. Updates UI accordingly.
-        """
+        if dir_path:
+            self.download_dir = dir_path
+            self._update_status(f"Download directory changed to: {dir_path}")
+
+    def _start_download(self) -> None:
+        """Initialize download process."""
         url = self.url_entry.get().strip()
         if not url:
-            self.status_label.configure(text="Please enter a URL")
+            self._show_error(ERROR_MESSAGES['invalid_url'])
             return
-        
-        # Update download directory
-        self.download_dir = self.dir_entry.get().strip()
-        if not self.download_dir:
-            self.download_dir = "/usr/lib/my-yt-down/downloads"
-            self.dir_entry.delete(0, tk.END)
-            self.dir_entry.insert(0, self.download_dir)
-        
-        if not os.path.exists(self.download_dir):
-            try:
-                os.makedirs(self.download_dir, mode=0o777, exist_ok=True)
-            except PermissionError:
-                fallback_dir = os.path.expanduser("~/Downloads/my-yt-down")
-                try:
-                    os.makedirs(fallback_dir, exist_ok=True)
-                    self.download_dir = fallback_dir
-                    self.dir_entry.delete(0, tk.END)
-                    self.dir_entry.insert(0, fallback_dir)
-                    self.status_label.configure(text=f"Using fallback directory: {fallback_dir}")
-                except Exception as e:
-                    self.status_label.configure(text=f"Error creating directory: {str(e)}")
-                    return
-            except Exception as e:
-                self.status_label.configure(text=f"Error creating directory: {str(e)}")
-                return
-        
+            
         try:
-            # Update UI
-            self.status_label.configure(text="Starting download...")
-            self.download_btn.configure(state="disabled")
-            
-            # Create download entry
-            download_frame = ctk.CTkFrame(self.downloads_list)
-            download_frame.pack(fill="x", padx=10, pady=5)
-            
-            title_label = ctk.CTkLabel(
-                download_frame,
-                text=url,
-                font=("Roboto", 12)
+            options = DownloadOptions(
+                format=self.format_var.get(),
+                quality=self.quality_var.get(),
+                output_dir=getattr(self, 'download_dir', DOWNLOADS_DIR),
+                convert_audio=(self.type_var.get() == "audio")
             )
-            title_label.pack(side="left", padx=10)
             
-            progress_label = ctk.CTkLabel(
-                download_frame,
-                text="0%",
-                font=("Roboto", 12)
+            download_id = self.downloader.download(
+                url, 
+                options,
+                self._update_progress
             )
-            progress_label.pack(side="right", padx=10)
             
-            # Prepare format info
-            format_info = {
-                'format_type': self.format_type_var.get(),
-                'format_name': self.get_format_name()
+            self.active_downloads[download_id] = {
+                'url': url,
+                'start_time': datetime.now()
             }
             
-            # Start download
-            thread = threading.Thread(
-                target=self.download_media,
-                args=(url, download_frame, progress_label, format_info)
-            )
-            thread.daemon = True
-            thread.start()
+            self._update_status(f"Download started: {url}")
+            self.download_button.configure(state="disabled")
             
+        except DownloadError as e:
+            self._show_error(str(e))
         except Exception as e:
-            self.status_label.configure(text=f"Error: {str(e)}")
-            self.download_btn.configure(state="normal")
-    
-    def download_media(self, url, frame, progress_label, format_info):
-        """Handle the media download process.
-        
-        Args:
-            url (str): YouTube URL to download from
-            frame (CTkFrame): Frame displaying download progress
-            progress_label (CTkLabel): Label for progress updates
-            format_info (dict): Format and quality options
-        """
-        try:
-            def progress_callback(progress):
-                progress_label.configure(text=f"{progress:.1f}%")
-            
-            # Download
-            self.downloader.download_media(
-                url=url,
-                output_path=Path(self.download_dir),
-                format_info=format_info,
-                callback=progress_callback
-            )
-            
-            # Update UI
-            progress_label.configure(text="Done!")
-            self.status_label.configure(text="Download completed!")
-            
-        except Exception as e:
-            self.status_label.configure(text=f"Error: {str(e)}")
-            if frame:
-                frame.destroy()
-        
-        finally:
-            self.download_btn.configure(state="normal")
-    
-    def browse_directory(self):
-        """Open directory browser for save location selection.
-        
-        Opens a system file dialog for the user to choose where
-        downloads should be saved. Updates the config when changed.
-        """
-        dir_path = filedialog.askdirectory(initialdir=self.download_dir)
-        if dir_path:
-            self.dir_entry.delete(0, tk.END)
-            self.dir_entry.insert(0, dir_path)
-            self.download_dir = dir_path
-            self.save_config()
-    
-    def load_config(self):
-        """Load application configuration from file.
-        
-        Returns:
-            dict: Configuration settings
-        """
-        config_path = Path(BASE_DIR) / "config.json"
-        if config_path.exists():
-            with open(config_path) as f:
-                return json.load(f)
-        return {}
-    
-    def save_config(self):
-        """Save current configuration to file."""
-        config_path = Path(BASE_DIR) / "config.json"
-        config = {
-            'download_dir': self.download_dir
-        }
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
+            self.logger.error(f"Unexpected error: {str(e)}")
+            self._show_error(ERROR_MESSAGES['download_failed'])
+
+    def _update_progress(self, progress: float) -> None:
+        """Update download progress display."""
+        self._update_status(f"Download progress: {progress:.1f}%")
+        if progress >= 100:
+            self.download_button.configure(state="normal")
+            self._update_status("Download completed!")
+
+    def _update_status(self, message: str) -> None:
+        """Update status display with new message."""
+        self.status_text.configure(state="normal")
+        self.status_text.insert("end", f"{datetime.now().strftime('%H:%M:%S')} - {message}\n")
+        self.status_text.see("end")
+        self.status_text.configure(state="disabled")
+
+    def _show_error(self, message: str) -> None:
+        """Display error message."""
+        self._update_status(f"Error: {message}")
+        self.logger.error(message)
+        messagebox.showerror("Error", message)
+
+    def _update_logs(self):
+        """Update logs display."""
+        logs_content = read_logs()
+        self.logs_text.configure(state="normal")
+        self.logs_text.delete("1.0", "end")
+        self.logs_text.insert("1.0", logs_content)
+        self.logs_text.configure(state="disabled")
+        self.logs_text.see("end")
+        self.after(5000, self._update_logs)
+
+    def update_progress(self, current: int, total: int):
+        """Update the progress bar based on current and total values."""
+        if total > 0:
+            percentage = (current / total) * 100
+            self.progress_bar.set(percentage)
+        else:
+            self.progress_bar.set(0)
+
+    def cancel_download(self):
+        """Cancel the ongoing download."""
+        if self.downloader._current_download:
+            download_id = self.downloader._current_download.id  # Obter o ID do download atual
+            self.downloader.cancel(download_id)  # Passar o ID para o método de cancelamento
+            logging.info("Download canceled by user.")
+        else:
+            logging.warning("No current download to cancel.")
+
+    def clear_log(self):
+        """Clear the log file."""
+        log_file_path = os.path.join(LOGS_DIR, "youtube_downloader.log")
+        open(log_file_path, 'w').close()  # Clear the log file
+        logging.info("Log file cleared.")
+        self.logs_text.configure(state="normal")
+        self.logs_text.delete("1.0", "end")  # Clear the displayed logs
+        self.logs_text.configure(state="disabled")
+        messagebox.showinfo("Log Cleared", "The log file has been cleared.")
+
+    def open_logs_folder(self):
+        """Open the logs folder in the file explorer."""
+        logs_folder_path = os.path.expanduser("~/.my-yt-down/logs/")
+        os.system(f'xdg-open "{logs_folder_path}"')  # Open the logs folder in the file explorer
+        logging.info("Opened logs folder.")
 
 if __name__ == "__main__":
     app = DownloaderGUI()

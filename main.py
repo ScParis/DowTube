@@ -1,30 +1,29 @@
-import customtkinter as ctk
+"""Main entry point for the YouTube Downloader application."""
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-from gui import DownloaderGUI
-from error_reporter import setup_error_handling
+import logging
+from pathlib import Path
+from datetime import datetime
 
-def main():
-    try:
-        # Set appearance mode and default color theme
-        ctk.set_appearance_mode("System")
-        ctk.set_default_color_theme("blue")
+# Add the project root directory to Python path
+ROOT_DIR = Path(__file__).parent
+sys.path.insert(0, str(ROOT_DIR))
 
-        # Configurar error reporting
-        setup_error_handling(
-            token=os.environ.get('GITHUB_TOKEN'),
-            repo_owner=os.environ.get('GITHUB_REPO_OWNER'),
-            repo_name=os.environ.get('GITHUB_REPO_NAME')
-        )
-        
-        # Create the main window
-        app = DownloaderGUI()
-        
-        # Start the application
-        app.mainloop()
-    except Exception as e:
-        print(f"An error occurred: {e}")
+# Configure logging
+from src.config.settings import LOGS_DIR
+os.makedirs(LOGS_DIR, exist_ok=True)
+log_file = os.path.join(LOGS_DIR, f"youtube_downloader_{datetime.now().strftime('%Y%m%d')}.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
+)
+
+from src.gui import DownloaderGUI
 
 if __name__ == "__main__":
-    main()
+    app = DownloaderGUI()
+    app.mainloop()
